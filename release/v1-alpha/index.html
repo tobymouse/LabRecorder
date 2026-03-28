@@ -1,0 +1,2954 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实验记录系统</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%231e40af'/><text x='16' y='23' font-size='20' text-anchor='middle' font-family='serif'>🔬</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --pass-color: #22c55e;
+    --fail-color: #f97316;
+    --pass-bg: #dcfce7;
+    --fail-bg: #ffedd5;
+    --header-bg: #eff6ff;
+    --group-bg: #f0f9ff;
+    --border: #d1d5db;
+    --primary: #3b82f6;
+    --primary-dark: #1d4ed8;
+    --sidebar-w: 260px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #f8fafc; color: #1e293b; padding-bottom: 14px; }
+
+  /* ── 顶部导航 ── */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 52px;
+    background: linear-gradient(90deg, #1e40af, #3b82f6);
+    display: flex; align-items: center; padding: 0 16px; gap: 12px;
+    z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  }
+  .topbar h1 { color: #fff; font-size: 17px; font-weight: 600; flex: 1; }
+  .topbar .badge { background: rgba(255,255,255,.2); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .btn { cursor: pointer; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 500; transition: all .15s; }
+  .btn-primary { background: #fff; color: #1e40af; }
+  .btn-primary:hover { background: #dbeafe; }
+  .btn-danger { background: #ef4444; color: #fff; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-success { background: #22c55e; color: #fff; }
+  .btn-success:hover { background: #16a34a; }
+  .btn-outline { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.5); }
+  .btn-outline:hover { background: rgba(255,255,255,.15); }
+
+  /* ── 侧边栏 ── */
+  .layout { display: flex; padding-top: 52px; min-height: 100vh; }
+  .sidebar {
+    width: var(--sidebar-w); flex-shrink: 0;
+    background: #fff; border-right: 1px solid var(--border);
+    padding: 16px 12px; overflow-y: auto;
+    position: fixed; top: 52px; bottom: 0; left: 0;
+    transition: width .2s ease, padding .2s ease;
+  }
+  .sidebar.collapsed { width: 36px; padding: 12px 6px; overflow: hidden; }
+  .sidebar.collapsed .sidebar-body { display: none; }
+  .sidebar-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; cursor: pointer; user-select: none;
+  }
+  .sidebar.collapsed .sidebar-header { justify-content: center; margin-bottom: 0; }
+  .sidebar-toggle {
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    border-radius: 5px; color: #94a3b8; font-size: 14px; flex-shrink: 0;
+    transition: background .1s;
+  }
+  .sidebar-toggle:hover { background: #f1f5f9; color: #475569; }
+  .sidebar-section { margin-bottom: 20px; }
+  .sidebar-section h3 { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; padding: 0 4px; }
+  .record-item {
+    padding: 8px 10px; border-radius: 7px; cursor: pointer;
+    margin-bottom: 4px; transition: background .1s;
+    border: 1px solid transparent;
+  }
+  .record-item:hover { background: #f1f5f9; }
+  .record-item.active { background: #dbeafe; border-color: #93c5fd; }
+  .record-item .rec-name { font-size: 13px; font-weight: 500; }
+  .record-item .rec-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .record-item .rec-actions { display: none; gap: 4px; margin-top: 4px; }
+  .record-item:hover .rec-actions { display: flex; }
+  .rec-btn { font-size: 11px; padding: 2px 6px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: #fff; }
+  .rec-btn:hover { background: #f1f5f9; }
+  .rec-btn.del { color: #ef4444; border-color: #fca5a5; }
+  .rec-btn.del:hover { background: #fef2f2; }
+
+  /* ── 主区域 ── */
+  .main { margin-left: var(--sidebar-w); flex: 1; padding: 20px; min-width: 0; max-width: calc(100vw - var(--sidebar-w)); overflow-x: hidden; transition: margin-left .2s ease; }
+  .sidebar.collapsed ~ .main { margin-left: 36px; max-width: calc(100vw - 36px); }
+
+  /* ── 工具栏 ── */
+  .toolbar {
+    background: #fff; border-radius: 10px; padding: 14px 16px;
+    margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .toolbar input[type=text] {
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; outline: none; transition: border .15s;
+  }
+  .toolbar input[type=text]:focus { border-color: var(--primary); }
+  .toolbar-sep { flex: 1; }
+
+  /* ── 搜索栏 ── */
+  .search-bar {
+    background: #fff; border-radius: 10px; padding: 12px 16px;
+    margin-bottom: 16px; display: flex; gap: 10px; align-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08); flex-wrap: wrap;
+  }
+  .search-bar input, .search-bar select {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; outline: none;
+  }
+  .search-bar input:focus, .search-bar select:focus { border-color: var(--primary); }
+  .search-tag { display: inline-flex; align-items: center; gap: 4px; background: #dbeafe; color: #1e40af; padding: 3px 8px; border-radius: 20px; font-size: 12px; }
+
+  /* ── 多选下拉组件 ── */
+  .ms-wrap { position: relative; display: inline-block; }
+  .ms-btn {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; background: #fff; white-space: nowrap; user-select: none;
+    min-width: 90px; max-width: 160px;
+  }
+  .ms-btn:hover { border-color: var(--primary); }
+  .ms-btn.active { border-color: var(--primary); background: #eff6ff; }
+  .ms-btn .ms-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .ms-btn .ms-arrow { font-size: 10px; color: #94a3b8; transition: transform .2s; }
+  .ms-btn.open .ms-arrow { transform: rotate(180deg); }
+  .ms-panel {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 1000;
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 140px; max-width: 200px;
+    max-height: 240px; overflow-y: auto; padding: 4px 0;
+  }
+  .ms-panel.show { display: block; }
+  .ms-panel-head {
+    display: flex; gap: 4px; padding: 6px 8px 4px;
+    border-bottom: 1px solid #f1f5f9; font-size: 12px;
+  }
+  .ms-panel-head button {
+    flex: 1; padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px;
+    background: #f8fafc; cursor: pointer; font-size: 11px; color: #475569;
+  }
+  .ms-panel-head button:hover { background: #e2e8f0; }
+  .ms-item {
+    display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+    cursor: pointer; font-size: 13px; transition: background .1s;
+  }
+  .ms-item:hover { background: #f8fafc; }
+  .ms-item input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--primary); }
+
+  /* 隐藏眼睛按钮 */
+  .eye-btn { font-size: 13px; cursor: pointer; opacity: .55; transition: opacity .15s; margin-right: 2px; }
+  .eye-btn:hover { opacity: 1; }
+
+  /* ── 实验表格容器 ── */
+  .table-container {
+    background: #fff; border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    overflow-x: scroll; overflow-y: visible;
+    margin-bottom: 16px;
+  }
+  table { border-collapse: collapse; min-width: 100%; font-size: 12px; }
+  th, td { border: 1px solid var(--border); white-space: nowrap; }
+  th { background: var(--header-bg); font-weight: 600; padding: 6px 10px; text-align: center; position: sticky; top: 0; z-index: 2; }
+  th.cond-header { background: #dbeafe; font-size: 13px; color: #1d4ed8; }
+  td { padding: 4px 6px; text-align: center; min-width: 60px; }
+  td.cat-cell { background: #eff6ff; font-weight: 600; writing-mode: horizontal-tb; min-width: 60px; vertical-align: middle; color: #1e40af; }
+  td.ic-cell { background: #f8fafc; color: #334155; font-weight: 600; min-width: 40px; }
+  tr.sample-even td:not(.cat-cell):not(.ic-cell) { background: #f8fafc; }
+  tr.sample-odd  td:not(.cat-cell):not(.ic-cell) { background: #ffffff; }
+  td.summary-cell-col { min-width: 68px; padding: 0 !important; vertical-align: top; }
+  .add-sample-row td { background: #f8fafc; }
+  .add-sample-row:hover td { background: inherit !important; }
+  .add-sample-btn { color: #3b82f6; font-size: 13px; cursor: pointer; padding: 2px 8px; border-radius: 4px; border: 1px dashed #93c5fd; background: #f8fafc; }
+  .add-sample-btn:hover { background: #e0f2fe; }
+  .add-round-row td { background: #eff6ff; }
+  .add-round-btn { color: #3b82f6; font-size: 12px; cursor: pointer; padding: 2px 8px; border-radius: 4px; border: 1px dashed #93c5fd; background: #eff6ff; white-space:nowrap; }
+  .add-round-btn:hover { background: #dbeafe; }
+  .del-round-btn { color: #f97316; font-size: 12px; cursor: pointer; padding: 2px 8px; border-radius: 4px; border: 1px dashed #fdba74; background: #fff7ed; white-space:nowrap; }
+  .del-round-btn:hover { background: #ffedd5; }
+  .del-sample-btn { color: #ef4444; font-size: 12px; cursor: pointer; padding: 2px 8px; border-radius: 4px; border: 1px dashed #fca5a5; background: #fff1f2; white-space:nowrap; }
+  .del-sample-btn:hover { background: #e0f2fe; }
+  .add-cat-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; color: #3b82f6; font-size: 12px; cursor: pointer; padding: 3px 10px; border-radius: 4px; border: 1px dashed #93c5fd; background: #eff6ff; }
+  .add-cat-btn:hover { background: #dbeafe; }
+  /* 同一样本的非首次行：去掉上边框；上一行（前序行）的下边框也去掉，融为一组 */
+  tr.same-sample-row td { border-top: none !important; }
+  tr:has(+ tr.same-sample-row) td { border-bottom: none !important; }
+  /* 行高亮：!important 确保覆盖 sample-even/odd 的背景色 */
+  tr.sample-even:hover td,
+  tr.sample-odd:hover  td { background: #e0f2fe !important; }
+  tr:hover td.cat-cell { background: #e0f2fe !important; }
+  tr:hover td.ic-cell  { background: #e0f2fe !important; }
+  /* add-sample-row 不参与行高亮 */
+  tr.add-sample-row:hover td { background: #f8fafc !important; }
+  /* cat-cell 联动高亮（rowspan跨行时由JS控制） */
+  td.cat-cell.cat-hover { background: #e0f2fe !important; }
+  td.ic-cell.ic-hover   { background: #e0f2fe !important; }
+  /* passrate 行保持原背景，不被 hover 覆盖 */
+  tr.passrate-row td { background: #eff6ff; font-weight: 700; font-size: 12px; color: #1e3a8a; border-top: 2px solid #93c5fd; }
+  tr.passrate-row td.pr-label { background: #dbeafe; }
+  tr.passrate-row:hover td { background: #eff6ff !important; }
+  tr.passrate-row:hover td.pr-label { background: #dbeafe !important; }
+  tr.cat-passrate-row:hover td { background: #eff6ff !important; }
+  tr.cat-passrate-row:hover td.cpr-label { background: #dbeafe !important; }
+
+  /* ── P/F 标签 ── */
+  .result-cell { cursor: pointer; min-width: 72px; padding: 0 !important; vertical-align: middle; }
+  /* 每次测试对齐行 */
+  .round-row { display: flex; align-items: center; justify-content: center; padding: 3px 4px; min-height: 28px; }
+  .round-row:last-child { border-bottom: none; }
+  .round-row.add-row { min-height: 24px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; cursor: pointer;
+    transition: transform .1s;
+  }
+  .tag:hover { transform: scale(1.08); box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+  .tag.pass { background: var(--pass-bg); color: var(--pass-color); border: 1px solid var(--pass-color); }
+  .tag.fail { background: var(--fail-bg); color: var(--fail-color); border: 1px solid var(--fail-color); }
+  .tag.empty { background: #f1f5f9; color: #94a3b8; border: 1px dashed #cbd5e1; }
+  .tag .del-tag { opacity: .6; font-size: 10px; cursor: pointer; }
+  .tag .del-tag:hover { opacity: 1; color: #ef4444; }
+  .add-result-btn { color: #94a3b8; font-size: 15px; cursor: pointer; line-height: 1; }
+  .add-result-btn:hover { color: var(--primary); }
+  /* 总结列每行对齐 */
+  .summary-cell { padding: 0 !important; min-width: 68px; }
+  .sum-row { display: flex; align-items: center; justify-content: center; padding: 3px 4px; min-height: 28px; border-bottom: 1px solid #f1f5f9; font-size: 12px; font-weight: 700; }
+  .sum-row:last-child { border-bottom: none; }
+  .sum-row.pass { background: #dcfce7; color: #16a34a; }
+  .sum-row.fail { background: #ffedd5; color: #ea580c; }
+  .sum-row.empty { background: #f8fafc; color: #cbd5e1; }
+  /* 分类 Pass Rate 小计行 */
+  tr.cat-passrate-row td { background: #eff6ff; font-size: 12px; color: #1d4ed8; border-top: 1px dashed #93c5fd; }
+  tr.cat-passrate-row td.cpr-label { background: #dbeafe; font-weight: 600; color: #1e3a8a; font-size: 11px; text-align: center; }
+
+  /* ── 单元格快速下拉 ── */
+  #cellDropdown {
+    display: none; position: fixed; z-index: 300;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 4px; min-width: 110px;
+    animation: dropIn .12s ease;
+  }
+  #cellDropdown.show { display: block; }
+  @keyframes dropIn { from { opacity:0; transform: translateY(-6px) scale(.96); } to { opacity:1; transform: none; } }
+  .cd-item {
+    display: flex; align-items: center; gap: 7px;
+    padding: 7px 12px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 500;
+    transition: background .1s;
+  }
+  .cd-item:hover { background: #f1f5f9; }
+  .cd-item.cd-pass { color: var(--pass-color); }
+  .cd-item.cd-pass:hover { background: var(--pass-bg); }
+  .cd-item.cd-fail { color: var(--fail-color); }
+  .cd-item.cd-fail:hover { background: var(--fail-bg); }
+  .cd-item.cd-empty { color: #94a3b8; }
+  .cd-item.cd-note { color: #6366f1; }
+  .cd-item.cd-del { color: #ef4444; border-top: 1px solid #f1f5f9; margin-top: 2px; padding-top: 9px; }
+  .cd-item.cd-del:hover { background: #fff1f2; }
+  .cd-sep { height: 1px; background: #f1f5f9; margin: 3px 0; }
+
+  /* ── 浮层弹窗 ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.4); z-index: 200; align-items: center; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px; padding: 24px; min-width: 320px; max-width: 480px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.2); position: relative;
+  }
+  .modal h2 { font-size: 16px; margin-bottom: 16px; }
+  .modal .close-btn { position: absolute; top: 14px; right: 14px; cursor: pointer; color: #94a3b8; font-size: 18px; line-height: 1; }
+  .modal .close-btn:hover { color: #1e293b; }
+  .form-row { margin-bottom: 12px; }
+  .form-row label { display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; }
+  .form-row input, .form-row select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; outline: none;
+  }
+  .form-row input:focus, .form-row select:focus { border-color: var(--primary); }
+  .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 6px 14px; border-radius: 20px; border: 2px solid var(--border);
+    cursor: pointer; font-size: 13px; font-weight: 500; transition: all .1s;
+  }
+  .chip.pass { border-color: var(--pass-color); color: var(--pass-color); }
+  .chip.pass.sel { background: var(--pass-bg); }
+  .chip.fail { border-color: var(--fail-color); color: var(--fail-color); }
+  .chip.fail.sel { background: var(--fail-bg); }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* ── 管理面板 ── */
+  .manage-section { margin-bottom: 20px; }
+  .manage-section h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; }
+  .editable-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #f1f5f9; border: 1px solid var(--border); border-radius: 20px;
+    padding: 4px 10px; font-size: 13px; cursor: grab;
+    user-select: none; transition: box-shadow .15s, opacity .15s;
+  }
+  .editable-tag:hover { border-color: var(--primary); background: #eff6ff; }
+  .editable-tag .x { cursor: pointer; color: #94a3b8; }
+  .editable-tag .x:hover { color: #ef4444; }
+  .editable-tag.dragging { opacity: .4; cursor: grabbing; }
+  .editable-tag.drag-over { border-color: var(--primary); box-shadow: 0 0 0 2px #bfdbfe; background: #eff6ff; }
+  .drag-handle { color: #94a3b8; font-size: 11px; margin-right: -2px; cursor: grab; }
+  .tag-list .drag-placeholder {
+    display: inline-flex; align-items: center; min-width: 60px; height: 30px;
+    border: 2px dashed #93c5fd; border-radius: 20px; background: #eff6ff;
+  }
+  .add-inline { display: flex; gap: 6px; margin-top: 8px; }
+  .add-inline input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; outline: none; }
+  .add-inline input:focus { border-color: var(--primary); }
+
+  /* ── 统计面板 ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-card {
+    background: #fff; border-radius: 10px; padding: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08); text-align: center;
+  }
+  .stat-card .val { font-size: 28px; font-weight: 700; }
+  .stat-card .lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .stat-card.pass .val { color: var(--pass-color); }
+  .stat-card.fail .val { color: var(--fail-color); }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .chart-card {
+    background: #fff; border-radius: 10px; padding: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .chart-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #475569; }
+  .chart-wrap { position: relative; height: 240px; }
+
+  /* ── 空状态 ── */
+  .empty-state { padding: 60px 20px; text-align: center; color: #94a3b8; }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+
+  /* ── Tab 切换 ── */
+  .tabs { display: flex; gap: 4px; background: #f1f5f9; border-radius: 8px; padding: 4px; margin-bottom: 16px; width: fit-content; }
+  .tab { padding: 7px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; color: #64748b; transition: all .15s; }
+  .tab.active { background: #fff; color: #1e40af; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+
+  /* ── 响应式 ── */
+  @media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+
+  .highlight { background: #fef08a !important; }
+  .no-results { padding: 20px; text-align: center; color: #94a3b8; font-size: 13px; }
+
+  /* ── 平台管理块 ── */
+  .plat-block {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 10px; background: #fafbfc;
+    transition: border-color .15s;
+  }
+  .plat-block:hover { border-color: #93c5fd; }
+  .plat-block.drag-over { border-color: var(--primary); box-shadow: 0 0 0 2px #bfdbfe; background: #eff6ff; }
+  .plat-block-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .plat-block-header .plat-name {
+    font-size: 13px; font-weight: 600; color: #1e40af;
+    cursor: pointer; padding: 2px 6px; border-radius: 4px;
+    border: 1px solid transparent;
+  }
+  .plat-block-header .plat-name:hover { border-color: var(--primary); background: #eff6ff; }
+  .plat-block-header .plat-del {
+    margin-left: auto; font-size: 11px; color: #ef4444; cursor: pointer;
+    padding: 2px 6px; border-radius: 4px; border: 1px solid #fca5a5;
+  }
+  .plat-block-header .plat-del:hover { background: #fef2f2; }
+  .plat-block-header .eye-btn { font-size:13px; cursor:pointer; opacity:.55; }
+  .plat-block-header .eye-btn:hover { opacity:1; }
+  .plat-block .tag-list { min-height: 28px; }
+  .plat-block .add-inline { margin-top: 6px; }
+
+</style>
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<div class="topbar">
+  <h1>🔬 实验记录系统</h1>
+  <span class="badge" id="recordCount">0 条记录</span>
+  <button class="btn btn-outline" onclick="openManageModal()">⚙ 管理字段</button>
+  <button class="btn btn-outline" onclick="showTab('stats')">📊 统计</button>
+  <button class="btn btn-primary" onclick="newRecord()">＋ 新建实验</button>
+</div>
+
+<div class="layout">
+  <!-- 侧边栏：历史记录 -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header" onclick="toggleSidebar()">
+      <span class="sidebar-section-title" style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;">历史实验</span>
+      <span class="sidebar-toggle" id="sidebarToggleIcon">◀</span>
+    </div>
+    <div class="sidebar-body">
+      <div id="recordList"><div class="no-results">暂无记录</div></div>
+    </div>
+  </div>
+
+  <!-- 主区域 -->
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('table')" id="tab-table">📋 实验表格</div>
+      <div class="tab" onclick="showTab('stats')" id="tab-stats">📊 统计分析</div>
+    </div>
+
+    <!-- 表格视图 -->
+    <div id="view-table">
+      <!-- 工具栏 -->
+      <div class="toolbar" id="toolbar">
+        <input type="text" id="expName" placeholder="实验名称" style="width:200px">
+        <input type="text" id="expNote" placeholder="备注（可选）" style="width:160px">
+        <div class="toolbar-sep"></div>
+        <button class="btn btn-outline" style="background:#f1f5f9;color:#374151;" onclick="exportExcel()">⬇ 导出 Excel</button>
+        <label class="btn btn-outline" style="background:#eff6ff;color:#1d4ed8;cursor:pointer;" title="导入之前导出的Excel文件">
+          ⬆ 导入 Excel
+          <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)">
+        </label>
+        <button class="btn btn-success" onclick="saveRecord()">💾 保存</button>
+      </div>
+
+      <!-- 搜索筛选 -->
+      <div class="search-bar">
+        <span style="font-size:13px;color:#64748b;font-weight:500;">筛选：</span>
+        <input type="text" id="searchText" placeholder="搜索样本/分类/条件..." oninput="applyFilter()" style="width:160px">
+        <div class="ms-wrap" id="mswrap-result">
+          <div class="ms-btn" id="msbtn-result" onclick="msToggle('result')">
+            <span class="ms-label" id="mslabel-result">全部结果</span>
+            <span class="ms-arrow">▼</span>
+          </div>
+          <div class="ms-panel" id="mspanel-result">
+            <div class="ms-panel-head">
+              <button onclick="msSelectAll('result')">全选</button>
+              <button onclick="msClearAll('result')">清空</button>
+            </div>
+            <div id="mslist-result"></div>
+          </div>
+        </div>
+        <div class="ms-wrap" id="mswrap-cat">
+          <div class="ms-btn" id="msbtn-cat" onclick="msToggle('cat')">
+            <span class="ms-label" id="mslabel-cat">全部分类</span>
+            <span class="ms-arrow">▼</span>
+          </div>
+          <div class="ms-panel" id="mspanel-cat">
+            <div class="ms-panel-head">
+              <button onclick="msSelectAll('cat')">全选</button>
+              <button onclick="msClearAll('cat')">清空</button>
+            </div>
+            <div id="mslist-cat"></div>
+          </div>
+        </div>
+        <div class="ms-wrap" id="mswrap-plat">
+          <div class="ms-btn" id="msbtn-plat" onclick="msToggle('plat')">
+            <span class="ms-label" id="mslabel-plat">全部平台</span>
+            <span class="ms-arrow">▼</span>
+          </div>
+          <div class="ms-panel" id="mspanel-plat">
+            <div class="ms-panel-head">
+              <button onclick="msSelectAll('plat')">全选</button>
+              <button onclick="msClearAll('plat')">清空</button>
+            </div>
+            <div id="mslist-plat"></div>
+          </div>
+        </div>
+        <div class="ms-wrap" id="mswrap-cond">
+          <div class="ms-btn" id="msbtn-cond" onclick="msToggle('cond')">
+            <span class="ms-label" id="mslabel-cond">全部条件</span>
+            <span class="ms-arrow">▼</span>
+          </div>
+          <div class="ms-panel" id="mspanel-cond">
+            <div class="ms-panel-head">
+              <button onclick="msSelectAll('cond')">全选</button>
+              <button onclick="msClearAll('cond')">清空</button>
+            </div>
+            <div id="mslist-cond"></div>
+          </div>
+        </div>
+        <div class="ms-wrap" id="mswrap-item">
+          <div class="ms-btn" id="msbtn-item" onclick="msToggle('item')">
+            <span class="ms-label" id="mslabel-item">全部项目</span>
+            <span class="ms-arrow">▼</span>
+          </div>
+          <div class="ms-panel" id="mspanel-item">
+            <div class="ms-panel-head">
+              <button onclick="msSelectAll('item')">全选</button>
+              <button onclick="msClearAll('item')">清空</button>
+            </div>
+            <div id="mslist-item"></div>
+          </div>
+        </div>
+        <div class="ms-wrap" id="mswrap-round">
+          <div class="ms-btn" id="msbtn-round" onclick="msToggle('round')">
+            <span class="ms-label" id="mslabel-round">全部次数</span>
+            <span class="ms-arrow">▼</span>
+          </div>
+          <div class="ms-panel" id="mspanel-round">
+            <div class="ms-panel-head">
+              <button onclick="msSelectAll('round')">全选</button>
+              <button onclick="msClearAll('round')">清空</button>
+            </div>
+            <div id="mslist-round"></div>
+          </div>
+        </div>
+        <button class="btn" style="padding:5px 12px;background:#f1f5f9;font-size:12px;" onclick="clearFilter()">✕ 清除</button>
+      </div>
+
+      <!-- 实验表格 -->
+      <div class="table-container">
+        <div id="tableWrap"></div>
+      </div>
+    </div>
+
+    <!-- 统计视图 -->
+    <div id="view-stats" style="display:none">
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>各分类通过率</h3>
+          <div class="chart-wrap"><canvas id="chartPassRate"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>各条件 Pass/Fail 分布</h3>
+          <div class="chart-wrap"><canvas id="chartCondDist"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>各测试项目通过情况</h3>
+          <div class="chart-wrap"><canvas id="chartItemPass"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Pass/Fail 总览</h3>
+          <div class="chart-wrap"><canvas id="chartTotal"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 单元格快速下拉 -->
+<div id="cellDropdown">
+  <div class="cd-item cd-pass"  onclick="cdSelect('pass')">✓ Pass</div>
+  <div class="cd-item cd-fail"  onclick="cdSelect('fail')">✗ Fail</div>
+  <div class="cd-item cd-empty" onclick="cdSelect(null)">— 空</div>
+  <div class="cd-sep"></div>
+  <div class="cd-item cd-note"  onclick="cdNote()">✎ 备注</div>
+  <div class="cd-item cd-del"   id="cdDelBtn" onclick="cdDelete()">✕ 删除</div>
+</div>
+
+<!-- 录入结果弹窗（仅用于编辑备注）-->
+
+<div class="modal-overlay" id="resultModal">
+  <div class="modal">
+    <span class="close-btn" onclick="closeModal('resultModal')">✕</span>
+    <h2 id="resultModalTitle">录入测试结果</h2>
+    <div style="color:#64748b;font-size:12px;margin-bottom:14px;" id="resultModalInfo"></div>
+    <div class="form-row">
+      <label>结果</label>
+      <div class="chip-group">
+        <div class="chip pass" id="chipPass" onclick="toggleChip('pass')">✓ Pass</div>
+        <div class="chip fail" id="chipFail" onclick="toggleChip('fail')">✗ Fail</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>备注（可选）</label>
+      <input type="text" id="resultNote" placeholder="如：第2次重测">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" style="background:#f1f5f9;" onclick="closeModal('resultModal')">取消</button>
+      <button class="btn btn-success" id="resultModalConfirmBtn" onclick="confirmResult()">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 管理字段弹窗 -->
+<div class="modal-overlay" id="manageModal">
+  <div class="modal" style="max-width:600px;width:95vw;max-height:90vh;overflow-y:auto;">
+    <span class="close-btn" onclick="closeModal('manageModal')">✕</span>
+    <h2>⚙ 管理实验字段
+      <span style="font-size:11px;color:#94a3b8;font-weight:400;">（双击编辑 · 拖拽⠿排序）</span>
+    </h2>
+    <div class="manage-section">
+      <h3>📁 分类
+        <span style="font-size:11px;color:#94a3b8;font-weight:400;">（样本数量可在表格中动态添加）</span>
+      </h3>
+      <div class="tag-list" id="catList"></div>
+      <div class="add-inline">
+        <input type="text" id="newCat" placeholder="新分类名称" onkeydown="if(event.key==='Enter')addCat()">
+        <button class="btn btn-primary" style="background:var(--primary);color:#fff;" onclick="addCat()">添加</button>
+      </div>
+    </div>
+    <div class="manage-section">
+      <h3>📱 平台
+        <span style="font-size:11px;color:#94a3b8;font-weight:400;">（每个平台可独立配置条件和测试项目）</span>
+      </h3>
+      <div id="platManageList"></div>
+      <div class="add-inline" style="margin-top:8px;">
+        <input type="text" id="newPlat" placeholder="新平台名称" onkeydown="if(event.key==='Enter')addPlatform()">
+        <button class="btn btn-primary" style="background:var(--primary);color:#fff;" onclick="addPlatform()">添加平台</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-success" onclick="applyManage()">✓ 应用并关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  数据模型
+// ─────────────────────────────────────────────
+const STORE_KEY = 'labrecord_v2';
+let state = {
+  records: [],         // 历史实验记录列表
+  current: null,       // 当前编辑的记录 id
+};
+
+// 当前实验数据结构
+let exp = {
+  id: null,
+  name: '',
+  note: '',
+  createdAt: null,
+  categories: ['分类A'],             // 分类名称列表
+  conditions: ['常温25°C'],          // 【兼容旧数据保留】全局条件列表
+  items: ['项目1'],                   // 【兼容旧数据保留】全局项目列表
+  platforms: [{ name: '平台A', items: ['项目1'], conditions: ['常温25°C'], hiddenConds: [], hiddenItems: [] }],
+  sampleCounts: [1],                  // 每个分类的样本数（与 categories 对应）
+  hiddenCats: [],                     // 隐藏的分类索引列表
+  hiddenConds: [],                    // 【兼容保留】
+  hiddenItems: [],                    // 【兼容保留】
+  hiddenPlats: [],                    // 隐藏的平台索引列表
+  // data[ci][ic][pli][cdi][ii] = [{result:'pass'|'fail', note:''}]
+  // key格式: "ci_ic_pli_cdi_ii"（cdi 为平台内条件索引）
+  data: {},
+};
+
+// 弹窗临时状态
+let pendingCell = null;  // {ci, ic, cdi, ii}
+let selectedResult = null;
+
+// ─────────────────────────────────────────────
+//  持久化（服务器 API）
+// ─────────────────────────────────────────────
+const API_BASE = 'http://localhost:3030';
+
+async function loadStore() {
+  try {
+    const res = await fetch(API_BASE + '/api/data');
+    const data = await res.json();
+    if (data && data.records) state = data;
+    if (!state.records) state.records = [];
+  } catch(e) {
+    // 离线或连接失败时尝试 localStorage 兜底
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) state = JSON.parse(raw);
+      if (!state.records) state.records = [];
+    } catch(e2) {}
+  }
+}
+
+function saveStore() {
+  // 异步保存，不阻塞UI
+  fetch(API_BASE + '/api/data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state)
+  }).catch(() => {
+    // 服务器不可用时降级到 localStorage
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch(e) {}
+  });
+}
+
+// ─────────────────────────────────────────────
+//  初始化
+// ─────────────────────────────────────────────
+loadStore().then(() => {
+  if (state.records.length > 0) {
+    loadRecord(state.current || state.records[state.records.length - 1].id);
+  } else {
+    initData();
+    renderAll();
+  }
+  renderSidebar();
+});
+
+function initData() {
+  exp.data = {};
+  exp.id = Date.now().toString();
+  exp.name = '';
+  exp.note = '';
+  exp.createdAt = new Date().toISOString();
+  // 兼容旧数据：若没有 sampleCounts 则从 sampleCount 补齐
+  if (!exp.sampleCounts) {
+    const n = exp.sampleCount || 1;
+    exp.sampleCounts = exp.categories.map(() => n);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Tab 切换
+// ─────────────────────────────────────────────
+function showTab(tab) {
+  document.getElementById('view-table').style.display = tab === 'table' ? '' : 'none';
+  document.getElementById('view-stats').style.display = tab === 'stats' ? '' : 'none';
+  document.getElementById('tab-table').classList.toggle('active', tab === 'table');
+  document.getElementById('tab-stats').classList.toggle('active', tab === 'stats');
+  if (tab === 'stats') renderStats();
+}
+
+// ─────────────────────────────────────────────
+//  表格渲染
+// ─────────────────────────────────────────────
+function renderAll() {
+  renderTable();
+  renderSidebar();
+  updateFilterCat();
+  updateFilterPlat();
+  updateFilterCond();
+  updateFilterItem();
+  initResultFilter();
+  document.getElementById('expName').value = exp.name || '';
+  document.getElementById('expNote').value = exp.note || '';
+  document.getElementById('recordCount').textContent = state.records.length + ' 条记录';
+}
+
+function renderTable() {
+  const { categories } = exp;
+  const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
+  if (!exp.sampleCounts) exp.sampleCounts = categories.map(() => exp.sampleCount || 1);
+
+  if (!categories.length || !platforms.length) {
+    document.getElementById('tableWrap').innerHTML = '<div class="empty-state"><div class="icon">🧪</div><p>请先在「管理字段」中添加分类和平台</p></div>';
+    return;
+  }
+
+  const searchText = (document.getElementById('searchText')?.value || '').toLowerCase();
+  const filterResults = msGetSelected('result');
+  const filterResult = filterResults.size > 0 ? [...filterResults] : null;
+  const filterCats = msGetSelected('cat');
+  const filterPlats = msGetSelected('plat');
+  const filterConds = msGetSelected('cond');
+  const filterItems = msGetSelected('item');
+  const filterRounds = msGetSelected('round');
+  const filterRound = filterRounds.size === 1 ? parseInt([...filterRounds][0]) : -1;
+
+  // 隐藏集合
+  const hiddenCats  = new Set(exp.hiddenCats  || []);
+  const hiddenPlats = new Set(exp.hiddenPlats || []);
+
+  // 可见平台及其可见条件/项目索引（每个平台独立）
+  const visiblePlatInfos = platforms.map((pl, pli) => {
+    const plItems = pl.items || [];
+    const plConds = pl.conditions || exp.conditions || [];
+    const hiddenConds = new Set(pl.hiddenConds || []);
+    const hiddenItems = new Set(pl.hiddenItems || []);
+    const visibleCondIdxs = plConds.map((_, i) => i).filter(i =>
+      !hiddenConds.has(i) && (filterConds.size === 0 || filterConds.has(plConds[i]))
+    );
+    const visibleItemIdxs = plItems.map((_, ii) => ii).filter(ii =>
+      !hiddenItems.has(ii) && (filterItems.size === 0 || filterItems.has(plItems[ii]))
+    );
+    // 是否空平台（无条件或无项目）
+    const isEmpty = visibleCondIdxs.length === 0 || visibleItemIdxs.length === 0;
+    return { pli, pl, plItems, plConds, visibleCondIdxs, visibleItemIdxs, isEmpty };
+  }).filter(({ pli, pl }) => !hiddenPlats.has(pli) && (filterPlats.size === 0 || filterPlats.has(pl.name)));
+
+  const noFilter = !searchText && !filterResult && filterRounds.size === 0 && filterPlats.size === 0 && filterConds.size === 0 && filterItems.size === 0;
+  const showCatPR = !searchText && !filterResult;
+
+  let html = '<table>';
+
+  // ── 表头第1行：平台大标题（#dbeafe）──
+  html += '<tr>';
+  html += `<th rowspan="3" style="min-width:72px;background:#dbeafe;color:#1e40af;">分类</th>`;
+  html += `<th rowspan="3" style="min-width:42px;background:#dbeafe;color:#1e40af;">ic</th>`;
+  visiblePlatInfos.forEach(({ pl, visibleCondIdxs, visibleItemIdxs }) => {
+    const platCols = visibleCondIdxs.length * (visibleItemIdxs.length + 1);
+    html += `<th colspan="${platCols}" style="background:#dbeafe;color:#1e40af;font-size:13px;font-weight:700;">${escHtml(pl.name)}</th>`;
+  });
+  if (noFilter) {
+    html += `<th colspan="3" rowspan="2" style="min-width:156px;background:#dbeafe;font-size:11px;color:#1e40af;">操作</th>`;
+  }
+  html += '</tr>';
+
+  // ── 表头第2行：条件大标题（#eff6ff）──
+  html += '<tr>';
+  visiblePlatInfos.forEach(({ plConds, visibleCondIdxs, visibleItemIdxs }) => {
+    visibleCondIdxs.forEach(cdi => {
+      html += `<th colspan="${visibleItemIdxs.length + 1}" style="background:#eff6ff;color:#1d4ed8;font-size:13px;font-weight:600;">${escHtml(plConds[cdi])}</th>`;
+    });
+  });
+  html += '</tr>';
+
+  // ── 表头第3行：项目名 + 总结（原色 var(--header-bg)）──
+  html += '<tr>';
+  visiblePlatInfos.forEach(({ plItems, plConds, visibleCondIdxs, visibleItemIdxs }) => {
+    visibleCondIdxs.forEach(() => {
+      visibleItemIdxs.forEach(ii => {
+        html += `<th style="font-size:12px;min-width:72px;">${escHtml(plItems[ii])}</th>`;
+      });
+      html += `<th style="font-size:12px;min-width:68px;background:#f8fafc;">总结</th>`;
+    });
+  });
+  if (noFilter) {
+    html += `<th style="min-width:52px;background:#eff6ff;font-size:11px;color:#3b82f6;">添加次数</th>`;
+    html += `<th style="min-width:52px;background:#eff6ff;font-size:11px;color:#3b82f6;">删除次数</th>`;
+    html += `<th style="min-width:52px;background:#eff6ff;font-size:11px;color:#3b82f6;">删除样本</th>`;
+  }
+  html += '</tr>';
+
+  // ── 数据行（按分类分组） ──
+  // 统计已筛选样本中各结果类型的数量（用于更新全Pass/全Fail标签括号内数字）
+  const resultStats = { pass: 0, fail: 0, allpass: 0, allfail: 0, total: 0 };
+  categories.forEach((cat, ci) => {
+    if (hiddenCats.has(ci)) return;
+    if (filterCats.size > 0 && !filterCats.has(cat)) return;
+    const sampleCount = exp.sampleCounts[ci] || 1;
+
+    // 计算该分类可见样本
+    const visibleRows = [];
+    for (let ic = 0; ic < sampleCount; ic++) {
+      if (searchText) {
+        const matchCat = cat.toLowerCase().includes(searchText);
+        const matchIc = String(ic + 1).includes(searchText);
+        let matchData = false;
+        visiblePlatInfos.forEach(({ pli, plItems, visibleCondIdxs }) => {
+          visibleCondIdxs.forEach(cdi => {
+            plItems.forEach((_, ii) => {
+              getCell(ci, ic, pli, cdi, ii).forEach(r => {
+                if (r.note && r.note.toLowerCase().includes(searchText)) matchData = true;
+              });
+            });
+          });
+        });
+        if (!matchCat && !matchIc && !matchData) continue;
+      }
+      if (filterResult) {
+        let rowHasPass = false, rowHasFail = false;
+        let rowHasAllPass = false, rowHasAllFail = false;
+        visiblePlatInfos.forEach(({ pli, visibleCondIdxs, visibleItemIdxs }) => {
+          visibleCondIdxs.forEach(cdi => {
+            let condPass = 0, condFail = 0, condTotal = 0;
+            visibleItemIdxs.forEach(ii => {
+              const cell = getCell(ci, ic, pli, cdi, ii);
+              const targets = filterRounds.size > 0
+                ? cell.filter((_, ri) => filterRounds.has(String(ri)))
+                : cell;
+              targets.forEach(r => {
+                if (!r) return;
+                condTotal++;
+                if (r.result === 'pass') { rowHasPass = true; condPass++; }
+                if (r.result === 'fail') { rowHasFail = true; condFail++; }
+              });
+            });
+            if (condTotal > 0 && condPass === condTotal) rowHasAllPass = true;
+            if (condTotal > 0 && condFail === condTotal) rowHasAllFail = true;
+          });
+        });
+        let rowMatches = false;
+        for (const rv of filterResult) {
+          if (rv === 'pass'    && rowHasPass)    { rowMatches = true; break; }
+          if (rv === 'fail'    && rowHasFail)    { rowMatches = true; break; }
+          if (rv === 'allpass' && rowHasAllPass) { rowMatches = true; break; }
+          if (rv === 'allfail' && rowHasAllFail) { rowMatches = true; break; }
+        }
+        if (!rowMatches) continue;
+      }
+      if (filterRounds.size > 0) {
+        let hasAnyRound = false;
+        visiblePlatInfos.forEach(({ pli, visibleCondIdxs, visibleItemIdxs }) => {
+          visibleCondIdxs.forEach(cdi => {
+            visibleItemIdxs.forEach(ii => {
+              const cell = getCell(ci, ic, pli, cdi, ii);
+              cell.forEach((r, ri) => { if (r && filterRounds.has(String(ri))) hasAnyRound = true; });
+            });
+          });
+        });
+        if (!hasAnyRound) continue;
+      }
+      visibleRows.push(ic);
+    }
+
+    // 计算每个样本最多有几次结果
+    const sampleRounds = visibleRows.map(ic => {
+      if (filterRounds.size > 0) return filterRounds.size;
+      let maxRounds = 0;
+      visiblePlatInfos.forEach(({ pli, visibleCondIdxs, visibleItemIdxs }) => {
+        visibleCondIdxs.forEach(cdi => {
+          visibleItemIdxs.forEach(ii => {
+            maxRounds = Math.max(maxRounds, getCell(ci, ic, pli, cdi, ii).length);
+          });
+        });
+      });
+      return Math.max(maxRounds, 1);
+    });
+
+    const maxCatRounds = showCatPR
+      ? (filterRounds.size > 0 ? filterRounds.size : Math.max(1, ...sampleRounds))
+      : 0;
+
+    let catRowspan = sampleRounds.reduce((a, b) => a + b, 0);
+    if (showCatPR) catRowspan += maxCatRounds;
+    if (noFilter) catRowspan += 1;
+
+    let catRendered = false;
+
+    visibleRows.forEach((ic, rowIdx) => {
+      const rounds = sampleRounds[rowIdx];
+      const icRowspan = rounds;
+
+      for (let round = 0; round < rounds; round++) {
+        const sortedRounds = filterRounds.size > 0
+          ? [...filterRounds].map(Number).sort((a,b)=>a-b)
+          : null;
+        const dataRound = sortedRounds ? sortedRounds[round] : round;
+        const sampleClass = rowIdx % 2 === 0 ? 'sample-even' : 'sample-odd';
+        const sameClass = round > 0 ? ' same-sample-row' : '';
+        html += `<tr class="${sampleClass}${sameClass}" data-ci="${ci}" data-ic="${ic}">`;
+
+        if (!catRendered) {
+          html += `<td class="cat-cell" rowspan="${catRowspan}" data-ci="${ci}">${escHtml(cat)}</td>`;
+          catRendered = true;
+        }
+        if (round === 0) {
+          html += `<td class="ic-cell" rowspan="${icRowspan}" data-ci="${ci}" data-ic="${ic}" style="vertical-align:middle;">${ic + 1}</td>`;
+        }
+
+        // 每个平台
+        visiblePlatInfos.forEach(({ pli, plItems, visibleCondIdxs, visibleItemIdxs }) => {
+          // 每个条件
+          visibleCondIdxs.forEach((cdi) => {
+            // 各项目
+            visibleItemIdxs.forEach((ii) => {
+              const cell = getCell(ci, ic, pli, cdi, ii);
+              const r = cell[dataRound];
+              if (r && r.result !== null && r.result !== undefined) {
+                const tagClass = r.result === 'pass' ? 'pass' : r.result === 'fail' ? 'fail' : 'empty';
+                const tagLabel = r.result === 'pass' ? 'P' : r.result === 'fail' ? 'F' : '—';
+                const noteIcon = r.note ? `<span style="font-size:9px;margin-left:2px;opacity:.7;" title="${escHtml(r.note)}">✎</span>` : '';
+                html += `<td class="result-cell" onclick="openCellDropdown(event,${ci},${ic},${pli},${cdi},${ii},${dataRound})">
+                  <div class="round-row">
+                    <span class="tag ${tagClass}" title="${escHtml(r.note ? '备注: '+r.note : '点击修改')}">
+                      ${tagLabel}${noteIcon}
+                    </span>
+                  </div>
+                </td>`;
+              } else {
+                html += `<td class="result-cell" onclick="openCellDropdown(event,${ci},${ic},${pli},${cdi},${ii},${dataRound})">
+                  <div class="round-row add-row">
+                    <span class="add-result-btn">＋</span>
+                  </div>
+                </td>`;
+              }
+            });
+
+            // 总结列（该平台-条件-该round的总结）
+            const roundResults = visibleItemIdxs.map(ii => {
+              const cell = getCell(ci, ic, pli, cdi, ii);
+              const entry = cell[dataRound];
+              return (entry !== undefined && entry !== null) ? entry.result : undefined;
+            });
+            const validResults = roundResults.filter(r => r === 'pass' || r === 'fail');
+            const hasAny = validResults.length > 0;
+            const allFilled = roundResults.every(r => r === 'pass' || r === 'fail');
+            const allPassRound = validResults.every(r => r === 'pass');
+            let sumClass = 'empty', sumText = '';
+            if (hasAny) {
+              if (allFilled && allPassRound) { sumClass = 'pass'; sumText = '✓ Pass'; }
+              else if (validResults.some(r => r === 'fail')) { sumClass = 'fail'; sumText = '✗ Fail'; }
+              else { sumClass = 'empty'; sumText = '…'; }
+            }
+            html += `<td class="summary-cell-col">
+              <div class="sum-row ${sumClass}">${sumText}</div>
+            </td>`;
+          });
+        });
+
+        // 操作列
+        if (noFilter) {
+          const isLastRound2 = round === rounds - 1;
+          html += `<td style="vertical-align:middle;text-align:center;padding:2px 3px;">
+            ${isLastRound2 ? `<span class="add-round-btn" onclick="addSampleRound(${ci},${ic})" title="新增一次记录">＋次</span>` : ''}
+          </td>`;
+          html += `<td style="vertical-align:middle;text-align:center;padding:2px 3px;">
+            <span class="del-round-btn" onclick="deleteSampleRound(${ci},${ic},${dataRound})" title="删除第${dataRound+1}次记录">删除</span>
+          </td>`;
+          if (round === 0) {
+            html += `<td rowspan="${icRowspan}" style="vertical-align:middle;text-align:center;padding:2px 3px;">
+              <span class="del-sample-btn" onclick="deleteSample(${ci},${ic})" title="删除样本${ic+1}的所有记录">删除</span>
+            </td>`;
+          }
+        }
+
+        html += '</tr>';
+      }
+    });
+
+    // 分类 Pass Rate 小计行
+    if (showCatPR) {
+      html += renderCatPassRateRow(ci, visiblePlatInfos, maxCatRounds, filterRound, noFilter, filterRounds);
+    }
+
+    // 添加样本行
+    if (noFilter) {
+      const totalCols = visiblePlatInfos.reduce((sum, { visibleCondIdxs, visibleItemIdxs }) =>
+        sum + visibleCondIdxs.length * (visibleItemIdxs.length + 1), 0);
+      html += `<tr class="add-sample-row">`;
+      html += `<td class="ic-cell">
+        <span class="add-sample-btn" onclick="addSample(${ci})">＋ 样本</span>
+      </td>`;
+      html += `<td colspan="${totalCols + 3}" style="background:#f8fafc;"></td>`;
+      html += `</tr>`;
+    }
+  });
+
+  // 添加分类行
+  if (noFilter && filterCats.size === 0) {
+    const totalCols = visiblePlatInfos.reduce((sum, { visibleCondIdxs, visibleItemIdxs }) =>
+      sum + visibleCondIdxs.length * (visibleItemIdxs.length + 1), 0);
+    html += `<tr><td colspan="${totalCols + 2 + 3}" style="padding:6px 10px;background:#f8fafc;">
+      <span class="add-cat-btn" onclick="openAddCatInline()">＋ 添加分类</span>
+    </td></tr>`;
+  }
+
+  // 计算全局最大次数
+  let maxGlobalRounds = 1;
+  categories.forEach((_, ci) => {
+    const sc = exp.sampleCounts[ci] || 1;
+    for (let ic = 0; ic < sc; ic++) {
+      visiblePlatInfos.forEach(({ pli, visibleCondIdxs, visibleItemIdxs }) => {
+        visibleCondIdxs.forEach(cdi => {
+          visibleItemIdxs.forEach(ii => {
+            maxGlobalRounds = Math.max(maxGlobalRounds, getCell(ci, ic, pli, cdi, ii).length);
+          });
+        });
+      });
+    }
+  });
+
+  // ── Pass Rate 统计行 ──
+  html += renderPassRateRow(categories, visiblePlatInfos, maxGlobalRounds, filterRound, noFilter, filterRounds);
+
+  html += '</table>';
+  const tableWrap = document.getElementById('tableWrap');
+  tableWrap.innerHTML = html;
+  updateFilterRound(maxGlobalRounds);
+
+  // 联动高亮 cat-cell / ic-cell（rowspan 跨行，需 JS 处理）
+  // 每次重新渲染都克隆节点清除旧监听，再重挂
+  const newWrap = tableWrap.cloneNode(false);
+  newWrap.innerHTML = tableWrap.innerHTML;
+  tableWrap.parentNode.replaceChild(newWrap, tableWrap);
+  const tw = document.getElementById('tableWrap');
+  let _hoverCi = null, _hoverIc = null;
+  function _clearHover() {
+    if (_hoverCi !== null) tw.querySelectorAll(`td.cat-cell[data-ci="${_hoverCi}"]`).forEach(td => td.classList.remove('cat-hover'));
+    if (_hoverCi !== null && _hoverIc !== null) tw.querySelectorAll(`td.ic-cell[data-ci="${_hoverCi}"][data-ic="${_hoverIc}"]`).forEach(td => td.classList.remove('ic-hover'));
+    _hoverCi = null; _hoverIc = null;
+  }
+  tw.addEventListener('mouseover', e => {
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+    const ci = tr.dataset.ci ?? null;
+    const ic = tr.dataset.ic ?? null;
+    if (ci === _hoverCi && ic === _hoverIc) return;
+    _clearHover();
+    _hoverCi = ci; _hoverIc = ic;
+    if (_hoverCi !== null) tw.querySelectorAll(`td.cat-cell[data-ci="${_hoverCi}"]`).forEach(td => td.classList.add('cat-hover'));
+    if (_hoverCi !== null && _hoverIc !== null) tw.querySelectorAll(`td.ic-cell[data-ci="${_hoverCi}"][data-ic="${_hoverIc}"]`).forEach(td => td.classList.add('ic-hover'));
+  });
+  tw.addEventListener('mouseout', e => {
+    if (e.relatedTarget && tw.contains(e.relatedTarget)) return;
+    _clearHover();
+  });
+}
+
+// 计算并渲染单个分类的 Pass Rate 小计行
+function renderCatPassRateRow(ci, visiblePlatInfos, maxRounds, filterRound = -1, noFilter = false, filterRounds = new Set()) {
+  if (!exp.sampleCounts) exp.sampleCounts = exp.categories.map(() => exp.sampleCount || 1);
+  const sampleCount = exp.sampleCounts[ci] || 1;
+  let html = '';
+
+  const rounds = filterRounds.size > 0
+    ? [...filterRounds].map(Number).sort((a,b)=>a-b)
+    : filterRound >= 0
+      ? [filterRound]
+      : Array.from({ length: maxRounds }, (_, i) => i);
+
+  rounds.forEach(round => {
+    html += `<tr class="cat-passrate-row">`;
+    html += `<td class="cpr-label" style="padding:4px 6px;white-space:nowrap;"><span style="opacity:.7;font-size:10px;">PR</span> 第${round+1}次</td>`;
+
+    visiblePlatInfos.forEach(({ pli, visibleCondIdxs, visibleItemIdxs }) => {
+      visibleCondIdxs.forEach((cdi) => {
+        visibleItemIdxs.forEach((ii) => {
+          let pass = 0, total = 0;
+          for (let ic = 0; ic < sampleCount; ic++) {
+            const cell = getCell(ci, ic, pli, cdi, ii);
+            if (cell[round] != null) {
+              if (cell[round].result !== null) { total++; if (cell[round].result === 'pass') pass++; }
+            }
+          }
+          const rate = total > 0 ? (pass / total * 100).toFixed(0) + '%' : '—';
+          const ratio = total > 0 ? pass / total : -1;
+          const color = ratio < 0 ? '#94a3b8' : ratio >= 0.8 ? '#16a34a' : ratio >= 0.5 ? '#d97706' : '#dc2626';
+          const title = total > 0 ? `第${round+1}次: ${pass}/${total}样本Pass` : '';
+          html += `<td style="padding:3px 4px;text-align:center;font-weight:600;color:${color};" title="${title}">${rate}</td>`;
+        });
+
+        // 总结列
+        let passCount = 0, totalCount = 0;
+        for (let ic = 0; ic < sampleCount; ic++) {
+          let allPass = true, allHave = true, anyResult = false;
+          visibleItemIdxs.forEach((ii) => {
+            const cell = getCell(ci, ic, pli, cdi, ii);
+            if (cell[round] == null || cell[round].result === null) allHave = false;
+            else { anyResult = true; if (cell[round].result !== 'pass') allPass = false; }
+          });
+          if (anyResult) { totalCount++; if (allHave && allPass) passCount++; }
+        }
+        const sumRate = totalCount > 0 ? (passCount/totalCount*100).toFixed(0) + '%' : '—';
+        const sumRatio = totalCount > 0 ? passCount / totalCount : -1;
+        const sumColor = sumRatio < 0 ? '#94a3b8' : sumRatio >= 0.8 ? '#16a34a' : sumRatio >= 0.5 ? '#d97706' : '#dc2626';
+        const sumTitle = totalCount > 0 ? `第${round+1}次全Pass: ${passCount}/${totalCount}` : '';
+        html += `<td style="padding:3px 4px;text-align:center;font-weight:700;color:${sumColor};background:#dbeafe;" title="${sumTitle}">${sumRate}</td>`;
+      });
+    });
+
+    if (noFilter) {
+      html += `<td colspan="3" style="background:#eff6ff;"></td>`;
+    }
+    html += '</tr>';
+  });
+
+  return html;
+}
+
+
+
+// 渲染底部总 Pass Rate 行
+function renderPassRateRow(categories, visiblePlatInfos, maxRounds, filterRound, noFilter = false, filterRounds = new Set()) {
+  if (!exp.sampleCounts) exp.sampleCounts = categories.map(() => exp.sampleCount || 1);
+
+  const rounds = filterRounds.size > 0
+    ? [...filterRounds].map(Number).sort((a,b)=>a-b)
+    : filterRound >= 0
+      ? [filterRound]
+      : Array.from({length: maxRounds}, (_, i) => i);
+
+  const showTotal = filterRounds.size === 0 && filterRound < 0 && maxRounds > 1;
+
+  let html = '';
+
+  function calcRoundRate(pli, cdi, ii, round) {
+    let pass = 0, total = 0;
+    const hiddenCatsSet = new Set(exp.hiddenCats || []);
+    categories.forEach((_, ci) => {
+      if (hiddenCatsSet.has(ci)) return;
+      const sc = exp.sampleCounts[ci] || 1;
+      for (let ic = 0; ic < sc; ic++) {
+        const cell = getCell(ci, ic, pli, cdi, ii);
+        if (round >= 0) {
+          if (cell[round] !== undefined && cell[round].result !== null) {
+            total++;
+            if (cell[round].result === 'pass') pass++;
+          }
+        } else {
+          cell.forEach(r => { if (r && r.result !== null) { total++; if (r.result === 'pass') pass++; } });
+        }
+      }
+    });
+    return { pass, total };
+  }
+
+  function calcRoundSumRate(pli, cdi, round) {
+    let passCount = 0, totalCount = 0;
+    const hiddenCatsSet = new Set(exp.hiddenCats || []);
+    categories.forEach((_, ci) => {
+      if (hiddenCatsSet.has(ci)) return;
+      const sc = exp.sampleCounts[ci] || 1;
+      for (let ic = 0; ic < sc; ic++) {
+        const plInfo = visiblePlatInfos.find(p => p.pli === pli);
+        const viIdxs = plInfo ? plInfo.visibleItemIdxs : [];
+        if (round >= 0) {
+          let allPass = true, allHave = true, anyResult = false;
+          viIdxs.forEach((ii) => {
+            const cell = getCell(ci, ic, pli, cdi, ii);
+            if (cell[round] == null || cell[round].result === null) allHave = false;
+            else { anyResult = true; if (cell[round].result !== 'pass') allPass = false; }
+          });
+          if (anyResult) { totalCount++; if (allHave && allPass) passCount++; }
+        } else {
+          let maxR = 0;
+          viIdxs.forEach((ii) => { maxR = Math.max(maxR, getCell(ci, ic, pli, cdi, ii).length); });
+          for (let r = 0; r < maxR; r++) {
+            let allPass = true, allHave = true, anyResult = false;
+            viIdxs.forEach((ii) => {
+              const cell = getCell(ci, ic, pli, cdi, ii);
+              if (cell[r] == null || cell[r].result === null) allHave = false;
+              else { anyResult = true; if (cell[r].result !== 'pass') allPass = false; }
+            });
+            if (anyResult) { totalCount++; if (allHave && allPass) passCount++; }
+          }
+        }
+      }
+    });
+    return { passCount, totalCount };
+  }
+
+  function rateCell(pass, total, bgColor) {
+    const rate = total > 0 ? (pass / total * 100).toFixed(0) + '%' : '—';
+    const ratio = total > 0 ? pass / total : -1;
+    const color = ratio < 0 ? '#94a3b8' : ratio >= 0.8 ? '#16a34a' : ratio >= 0.5 ? '#d97706' : '#dc2626';
+    const title = total > 0 ? `${pass}/${total}` : '';
+    const bg = bgColor ? `background:${bgColor};` : '';
+    return `<td style="padding:4px;text-align:center;color:${color};font-weight:600;${bg}" title="${title}">${rate}</td>`;
+  }
+
+  rounds.forEach(round => {
+    html += `<tr class="passrate-row">`;
+    html += `<td class="pr-label" colspan="2" style="padding:4px 8px;text-align:center;white-space:nowrap;">
+      <span style="opacity:.7;font-size:10px;">PR</span> 第${round+1}次
+    </td>`;
+    visiblePlatInfos.forEach(({ pli, visibleCondIdxs, visibleItemIdxs }) => {
+      visibleCondIdxs.forEach((cdi) => {
+        visibleItemIdxs.forEach((ii) => {
+          const { pass, total } = calcRoundRate(pli, cdi, ii, round);
+          html += rateCell(pass, total, '');
+        });
+        const { passCount, totalCount } = calcRoundSumRate(pli, cdi, round);
+        html += rateCell(passCount, totalCount, '#dbeafe');
+      });
+    });
+    if (noFilter) {
+      html += `<td colspan="3" style="background:#eff6ff;"></td>`;
+    }
+    html += '</tr>';
+  });
+  
+  if (showTotal) {
+    html += `<tr class="passrate-row" style="border-top:2px solid #93c5fd;">`;
+    html += `<td class="pr-label" colspan="2" style="padding:4px 8px;text-align:center;font-weight:700;background:#93c5fd;color:#1e3a8a;">总计</td>`;
+    visiblePlatInfos.forEach(({ pli, visibleCondIdxs, visibleItemIdxs }) => {
+      visibleCondIdxs.forEach((cdi) => {
+        visibleItemIdxs.forEach((ii) => {
+          const { pass, total } = calcRoundRate(pli, cdi, ii, -1);
+          html += rateCell(pass, total, '#eff6ff');
+        });
+        const { passCount, totalCount } = calcRoundSumRate(pli, cdi, -1);
+        html += rateCell(passCount, totalCount, '#93c5fd');
+      });
+    });
+    if (noFilter) {
+      html += `<td colspan="3" style="background:#dbeafe;"></td>`;
+    }
+    html += '</tr>';
+  }
+
+  return html;
+}
+
+// ─────────────────────────────────────────────
+//  数据访问帮助函数
+// ─────────────────────────────────────────────
+function cellKey(ci, ic, pli, cdi, ii) { return `${ci}_${ic}_${pli}_${cdi}_${ii}`; }
+function getCell(ci, ic, pli, cdi, ii) {
+  const arr = exp.data[cellKey(ci, ic, pli, cdi, ii)] || [];
+  // 兼容旧数据：过滤掉 null/undefined 条目，转为合法对象
+  return arr.map(e => (e === null || e === undefined) ? { result: null, note: '' } : e);
+}
+function setCell(ci, ic, pli, cdi, ii, arr) { exp.data[cellKey(ci, ic, pli, cdi, ii)] = arr; }
+
+// ─────────────────────────────────────────────
+//  单元格快速下拉
+// ─────────────────────────────────────────────
+let cdCtx = null; // { ci, ic, pli, cdi, ii, round }  round=-1表示新增，undefined同-1
+
+function openCellDropdown(e, ci, ic, pli, cdi, ii, round) {
+  e.stopPropagation();
+  const dd = document.getElementById('cellDropdown');
+  const isNew = (round === undefined || round === -1 || round === 'undefined');
+  cdCtx = { ci, ic, pli, cdi, ii, round: isNew ? undefined : round };
+
+  // 删除按钮：仅已有结果时显示
+  document.getElementById('cdDelBtn').style.display = isNew ? 'none' : '';
+  // 删除按钮上面的分割线
+  dd.querySelector('.cd-sep').style.display = isNew ? 'none' : '';
+
+  // 定位：优先在元素下方，超出屏幕则翻转
+  const rect = e.currentTarget.getBoundingClientRect();
+  dd.classList.remove('show');
+  dd.style.top = '';
+  dd.style.left = '';
+  dd.classList.add('show');
+
+  const ddH = dd.offsetHeight, ddW = dd.offsetWidth;
+  let top = rect.bottom + 4, left = rect.left;
+  if (top + ddH > window.innerHeight - 8) top = rect.top - ddH - 4;
+  if (left + ddW > window.innerWidth - 8) left = window.innerWidth - ddW - 8;
+  dd.style.top = top + 'px';
+  dd.style.left = left + 'px';
+}
+
+function closeCellDropdown() {
+  document.getElementById('cellDropdown').classList.remove('show');
+  cdCtx = null;
+}
+
+function cdSelect(result) {
+  if (!cdCtx) return;
+  const { ci, ic, pli, cdi, ii, round } = cdCtx;
+  const arr = getCell(ci, ic, pli, cdi, ii);
+  if (round !== undefined) {
+    arr[round] = { result, note: arr[round] ? arr[round].note || '' : '' };
+  } else {
+    arr.push({ result, note: '' });
+  }
+  setCell(ci, ic, pli, cdi, ii, arr);
+  closeCellDropdown();
+  renderTable();
+}
+
+function cdDelete() {
+  if (!cdCtx) return;
+  const { ci, ic, pli, cdi, ii, round } = cdCtx;
+  if (round === undefined) { closeCellDropdown(); return; }
+  const arr = getCell(ci, ic, pli, cdi, ii);
+  arr.splice(round, 1);
+  setCell(ci, ic, pli, cdi, ii, arr);
+  closeCellDropdown();
+  renderTable();
+}
+
+function cdNote() {
+  if (!cdCtx) return;
+  const { ci, ic, pli, cdi, ii, round } = cdCtx;
+  closeCellDropdown();
+  openResultModal(ci, ic, pli, cdi, ii, round);
+}
+
+// 点击外部关闭下拉
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('cellDropdown');
+  if (dd && dd.classList.contains('show') && !dd.contains(e.target)) {
+    closeCellDropdown();
+  }
+});
+
+// ─────────────────────────────────────────────
+//  结果录入弹窗（仅用于编辑备注）
+// ─────────────────────────────────────────────
+// editRound: undefined = 新增模式；数字 = 编辑第N次结果
+function openResultModal(ci, ic, pli, cdi, ii, editRound) {
+  pendingCell = { ci, ic, pli, cdi, ii, editRound };
+  selectedResult = null;
+  document.getElementById('chipPass').classList.remove('sel');
+  document.getElementById('chipFail').classList.remove('sel');
+  document.getElementById('resultNote').value = '';
+
+  const isEdit = editRound !== undefined;
+  if (isEdit) {
+    const arr = getCell(ci, ic, pli, cdi, ii);
+    const r = arr[editRound];
+    if (r) {
+      selectedResult = r.result;
+      document.getElementById('chipPass').classList.toggle('sel', r.result === 'pass');
+      document.getElementById('chipFail').classList.toggle('sel', r.result === 'fail');
+      document.getElementById('resultNote').value = r.note || '';
+    }
+  }
+
+  document.getElementById('resultModalTitle').textContent = isEdit ? '编辑结果 & 备注' : '录入测试结果';
+  document.getElementById('resultModalConfirmBtn').textContent = isEdit ? '✓ 保存' : '确认添加';
+
+  const infoEl = document.getElementById('resultModalInfo');
+  const platforms = exp.platforms || [];
+  const platName = platforms[pli] ? platforms[pli].name : '';
+  const plItems = platforms[pli] ? (platforms[pli].items || []) : [];
+  const plConds = platforms[pli] ? (platforms[pli].conditions || exp.conditions || []) : (exp.conditions || []);
+  const roundLabel = isEdit ? `  |  第 ${editRound + 1} 次结果` : '';
+  infoEl.textContent = `分类: ${exp.categories[ci]}  |  样本: ${ic+1}  |  平台: ${platName}  |  条件: ${plConds[cdi]}  |  项目: ${plItems[ii]}${roundLabel}`;
+  document.getElementById('resultModal').classList.add('show');
+}
+function toggleChip(type) {
+  selectedResult = (selectedResult === type) ? null : type;
+  document.getElementById('chipPass').classList.toggle('sel', selectedResult === 'pass');
+  document.getElementById('chipFail').classList.toggle('sel', selectedResult === 'fail');
+}
+function confirmResult() {
+  const { ci, ic, pli, cdi, ii, editRound } = pendingCell;
+  const arr = getCell(ci, ic, pli, cdi, ii);
+  const note = document.getElementById('resultNote').value.trim();
+  if (editRound !== undefined) {
+    const existing = arr[editRound] || {};
+    arr[editRound] = { result: selectedResult !== null ? selectedResult : existing.result || null, note };
+  } else {
+    arr.push({ result: selectedResult, note });
+  }
+  setCell(ci, ic, pli, cdi, ii, arr);
+  closeModal('resultModal');
+  renderTable();
+}
+function removeResult(ci, ic, pli, cdi, ii, ri) {
+  event.stopPropagation();
+  const arr = getCell(ci, ic, pli, cdi, ii);
+  arr.splice(ri, 1);
+  setCell(ci, ic, pli, cdi, ii, arr);
+  renderTable();
+}
+
+// ─────────────────────────────────────────────
+//  管理字段弹窗
+// ─────────────────────────────────────────────
+function openManageModal() {
+  renderManageLists();
+  document.getElementById('manageModal').classList.add('show');
+}
+function renderManageLists() {
+  renderTagList('catList', exp.categories, 'cat');
+  renderPlatManageList();
+}
+
+// 渲染平台管理列表（每个平台一个 block，含独立条件和项目管理）
+function renderPlatManageList() {
+  const platforms = exp.platforms || [];
+  if (!exp.hiddenPlats) exp.hiddenPlats = [];
+  const hiddenSet = new Set(exp.hiddenPlats);
+  const container = document.getElementById('platManageList');
+  if (!container) return;
+
+  container.innerHTML = platforms.map((pl, pli) => {
+    const isHidden = hiddenSet.has(pli);
+    const eyeIcon = isHidden ? '🙈' : '👁';
+    const eyeTitle = isHidden ? '已隐藏（点击显示）' : '点击隐藏';
+    const dimStyle = isHidden ? 'opacity:.6;' : '';
+    const plItems = pl.items || [];
+    const plConds = pl.conditions || [];
+    const hiddenCondsSet = new Set(pl.hiddenConds || []);
+
+    // 条件 tag html
+    const condTagsHtml = plConds.map((v, cdi) => {
+      const isCondHidden = hiddenCondsSet.has(cdi);
+      const condEye = isCondHidden ? '🙈' : '👁';
+      const condDim = isCondHidden ? 'opacity:.45;text-decoration:line-through;' : '';
+      return `<span class="editable-tag" draggable="true" style="${condDim}"
+        data-type="plat-cond" data-pli="${pli}" data-idx="${cdi}"
+        ondblclick="inlineEditPlatCond(this,${pli},${cdi})"
+        ondragstart="platCondDragStart(event,${pli},${cdi})"
+        ondragover="tagDragOver(event)"
+        ondragleave="tagDragLeave(event)"
+        ondrop="platCondDrop(event,${pli},${cdi})"
+        ondragend="tagDragEnd(event)">
+        <span class="drag-handle">⠿</span>
+        <span class="tag-text">${escHtml(v)}</span>
+        <span class="eye-btn" title="${condEye === '🙈' ? '已隐藏（点击显示）' : '点击隐藏'}" onclick="event.stopPropagation();toggleHidePlatCond(${pli},${cdi})">${condEye}</span>
+        <span class="x" onclick="event.stopPropagation();removePlatCond(${pli},${cdi})">✕</span>
+      </span>`;
+    }).join('');
+
+    // 项目 tag html
+    const itemTagsHtml = plItems.map((v, ii) => `
+      <span class="editable-tag" draggable="true"
+        data-type="plat-item" data-pli="${pli}" data-idx="${ii}"
+        ondblclick="inlineEditPlatItem(this,${pli},${ii})"
+        ondragstart="platItemDragStart(event,${pli},${ii})"
+        ondragover="tagDragOver(event)"
+        ondragleave="tagDragLeave(event)"
+        ondrop="platItemDrop(event,${pli},${ii})"
+        ondragend="tagDragEnd(event)">
+        <span class="drag-handle">⠿</span>
+        <span class="tag-text">${escHtml(v)}</span>
+        <span class="x" onclick="event.stopPropagation();removePlatItem(${pli},${ii})">✕</span>
+      </span>`).join('');
+
+    return `<div class="plat-block" style="${dimStyle}"
+      ondragover="event.preventDefault();event.dataTransfer.dropEffect='move';this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="this.classList.remove('drag-over');platDrop(event,${pli})">
+      <div class="plat-block-header">
+        <span class="drag-handle" style="cursor:grab;color:#94a3b8;" draggable="true"
+          ondragstart="platDragStart(event,${pli})"
+          ondragend="tagDragEnd(event)">⠿</span>
+        <span class="plat-name" ondblclick="inlineEditPlatName(this,${pli})"
+          title="双击编辑平台名称">${escHtml(pl.name)}</span>
+        <span class="eye-btn" title="${eyeTitle}" onclick="toggleHidePlat(${pli})">${eyeIcon}</span>
+        <span class="plat-del" onclick="removePlatform(${pli})">✕ 删除平台</span>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin:6px 0 3px;font-weight:600;">🌡 测试条件</div>
+      <div class="tag-list" id="platCondList-${pli}">${condTagsHtml}</div>
+      <div class="add-inline" style="margin-bottom:8px;">
+        <input type="text" id="newPlatCond-${pli}" placeholder="新条件" onkeydown="if(event.key==='Enter')addPlatCond(${pli})">
+        <button class="btn btn-primary" style="background:var(--primary);color:#fff;padding:6px 10px;font-size:12px;" onclick="addPlatCond(${pli})">+ 条件</button>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin:6px 0 3px;font-weight:600;">🧪 测试项目</div>
+      <div class="tag-list" id="platItemList-${pli}">${itemTagsHtml}</div>
+      <div class="add-inline">
+        <input type="text" id="newPlatItem-${pli}" placeholder="新测试项目" onkeydown="if(event.key==='Enter')addPlatItem(${pli})">
+        <button class="btn btn-primary" style="background:var(--primary);color:#fff;padding:6px 10px;font-size:12px;" onclick="addPlatItem(${pli})">+ 项目</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function renderTagList(containerId, arr, type) {
+  const el = document.getElementById(containerId);
+  const hiddenKey = type === 'cat' ? 'hiddenCats' : type === 'cond' ? 'hiddenConds' : 'hiddenItems';
+  const hiddenSet = new Set(exp[hiddenKey] || []);
+  el.innerHTML = arr.map((v, i) => {
+    const isHidden = hiddenSet.has(i);
+    const eyeIcon = isHidden ? '🙈' : '👁';
+    const eyeTitle = isHidden ? '已隐藏（点击显示）' : '点击隐藏';
+    const dimStyle = isHidden ? 'opacity:.45;text-decoration:line-through;' : '';
+    return `<span class="editable-tag" draggable="true"
+       style="${dimStyle}"
+       data-type="${type}" data-idx="${i}"
+       ondblclick="inlineEditTag(this,'${type}',${i})"
+       ondragstart="tagDragStart(event,'${type}',${i})"
+       ondragover="tagDragOver(event)"
+       ondragleave="tagDragLeave(event)"
+       ondrop="tagDrop(event,'${type}',${i})"
+       ondragend="tagDragEnd(event)">
+      <span class="drag-handle">⠿</span>
+      <span class="tag-text">${escHtml(v)}</span>
+      <span class="eye-btn" title="${eyeTitle}" onclick="event.stopPropagation();toggleHideTag('${type}',${i})">${eyeIcon}</span>
+      <span class="x" onclick="event.stopPropagation();removeTag('${type}',${i})">✕</span>
+    </span>`;
+  }).join('');
+}
+
+// ─── 拖拽排序 ───
+let _dragType = null, _dragFrom = -1;
+
+function tagDragStart(e, type, idx) {
+  _dragType = type; _dragFrom = idx;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function tagDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over');
+}
+function tagDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function tagDrop(e, type, toIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (_dragType !== type || _dragFrom === toIdx) return;
+  const fromIdx = _dragFrom;
+
+  const arr = type === 'cat' ? exp.categories : type === 'cond' ? exp.conditions : exp.items;
+  // 移动字段名
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, moved);
+
+  // ── 同步重排 exp.data 中对应的数据 key ──
+  if (type === 'cat') {
+    // 分类：ci 变化，需同步重排 data key 和 sampleCounts
+    if (exp.sampleCounts) {
+      const [sc] = exp.sampleCounts.splice(fromIdx, 1);
+      exp.sampleCounts.splice(toIdx, 0, sc);
+    }
+    // 重建 data：把原来 ci=fromIdx 映射到新的 ci 位置
+    // 构造新旧 ci 的映射：oldCi -> newCi
+    const oldOrder = Array.from({length: arr.length}, (_, i) => i);
+    // 还原：在 splice 之前，oldOrder[fromIdx] 的元素被移到 toIdx
+    // 实际上就是把 data 里所有 ci_* 的 key 重写为新 ci 对应关系
+    // 构建 old -> new 的 ci 映射
+    const oldToNew = buildReorderMap(arr.length, fromIdx, toIdx);
+    remapDataKeys(exp.data, 'ci', oldToNew,
+      exp.conditions.length, exp.items.length,
+      k => {
+        const [ci, ic, cdi, ii] = k.split('_').map(Number);
+        return { ci, ic, cdi, ii };
+      },
+      ({ ci, ic, cdi, ii }) => `${ci}_${ic}_${cdi}_${ii}`
+    );
+  } else if (type === 'cond') {
+    // 条件：cdi 变化
+    const oldToNew = buildReorderMap(arr.length, fromIdx, toIdx);
+    remapDataKeys(exp.data, 'cdi', oldToNew,
+      exp.categories.length, exp.items.length,
+      k => {
+        const [ci, ic, cdi, ii] = k.split('_').map(Number);
+        return { ci, ic, cdi, ii };
+      },
+      ({ ci, ic, cdi, ii }) => `${ci}_${ic}_${cdi}_${ii}`
+    );
+  } else if (type === 'item') {
+    // 项目：ii 变化
+    const oldToNew = buildReorderMap(arr.length, fromIdx, toIdx);
+    remapDataKeys(exp.data, 'ii', oldToNew,
+      exp.categories.length, exp.conditions.length,
+      k => {
+        const [ci, ic, cdi, ii] = k.split('_').map(Number);
+        return { ci, ic, cdi, ii };
+      },
+      ({ ci, ic, cdi, ii }) => `${ci}_${ic}_${cdi}_${ii}`
+    );
+  }
+
+  // 同步重排 hidden 索引
+  const hiddenKey = type === 'cat' ? 'hiddenCats' : type === 'cond' ? 'hiddenConds' : 'hiddenItems';
+  const oldToNewHidden = buildReorderMap(arr.length, fromIdx, toIdx);
+  if (exp[hiddenKey]) {
+    exp[hiddenKey] = exp[hiddenKey].map(h => oldToNewHidden[h] ?? h);
+  }
+
+  renderManageLists();
+}
+
+/**
+ * 构建重排映射：旧索引 -> 新索引
+ * 将 fromIdx 的元素移到 toIdx 后，其余元素依次填充
+ * 返回长度为 n+1 的数组（splice 前的长度），oldToNew[oldIdx] = newIdx
+ */
+function buildReorderMap(newLen, fromIdx, toIdx) {
+  // newLen 是 splice 之后的长度（已经操作完毕），所以旧长度也是 newLen（元素数不变，只是重排）
+  const n = newLen;
+  // 构造旧顺序：[0,1,2,...,n-1]
+  const oldOrder = Array.from({length: n}, (_, i) => i);
+  // 取出 fromIdx 后插入 toIdx（模拟上面的 splice 操作）
+  const [pulled] = oldOrder.splice(fromIdx, 1);
+  oldOrder.splice(toIdx, 0, pulled);
+  // oldOrder[newIdx] = oldIdx，反转得 oldIdx -> newIdx
+  const map = new Array(n);
+  oldOrder.forEach((oldIdx, newIdx) => { map[oldIdx] = newIdx; });
+  return map;
+}
+
+/**
+ * 把 exp.data 中所有 key 里 field 维度的旧索引替换为新索引
+ * field: 'ci' | 'cdi' | 'ii'
+ */
+function remapDataKeys(data, field, oldToNew, _a, _b, parseKey, buildKey) {
+  const entries = Object.entries(data);
+  const toDelete = [], toAdd = [];
+  entries.forEach(([k, v]) => {
+    const parts = parseKey(k);
+    const oldIdx = parts[field];
+    if (oldIdx === undefined) return;
+    const newIdx = oldToNew[oldIdx];
+    if (newIdx === undefined || newIdx === oldIdx) return;
+    toDelete.push(k);
+    const newParts = { ...parts, [field]: newIdx };
+    toAdd.push([buildKey(newParts), v]);
+  });
+  toDelete.forEach(k => delete data[k]);
+  toAdd.forEach(([k, v]) => { data[k] = v; });
+}
+function tagDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  _dragType = null; _dragFrom = -1;
+}
+function toggleHideTag(type, i) {
+  const hiddenKey = type === 'cat' ? 'hiddenCats' : type === 'cond' ? 'hiddenConds' : 'hiddenItems';
+  if (!exp[hiddenKey]) exp[hiddenKey] = [];
+  const idx = exp[hiddenKey].indexOf(i);
+  if (idx === -1) exp[hiddenKey].push(i);
+  else exp[hiddenKey].splice(idx, 1);
+  renderManageLists();
+  renderTable();  // 实时更新表格
+}
+function removeTag(type, i) {
+  if (type === 'cat') { exp.categories.splice(i, 1); if (exp.sampleCounts) exp.sampleCounts.splice(i, 1); }
+  else if (type === 'cond') exp.conditions.splice(i, 1);
+  else if (type === 'item') exp.items.splice(i, 1);
+  // 同步清理 hidden 列表：删除 i，并将 >i 的索引 -1
+  const hiddenKey = type === 'cat' ? 'hiddenCats' : type === 'cond' ? 'hiddenConds' : 'hiddenItems';
+  if (exp[hiddenKey]) {
+    exp[hiddenKey] = exp[hiddenKey]
+      .filter(h => h !== i)
+      .map(h => h > i ? h - 1 : h);
+  }
+  renderManageLists();
+}
+function inlineEditTag(span, type, i) {
+  const arr = type === 'cat' ? exp.categories : type === 'cond' ? exp.conditions : exp.items;
+  const oldVal = arr[i];
+  const textSpan = span.querySelector('.tag-text');
+  // 替换为输入框
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldVal;
+  input.style.cssText = 'width:80px;padding:2px 6px;border:1px solid var(--primary);border-radius:4px;font-size:13px;outline:none;';
+  textSpan.replaceWith(input);
+  input.focus();
+  input.select();
+
+  const finish = () => {
+    const newVal = input.value.trim();
+    if (newVal && newVal !== oldVal) arr[i] = newVal;
+    renderManageLists();
+  };
+  input.addEventListener('blur', finish);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = oldVal; input.blur(); } });
+}
+function removeCat(i) { removeTag('cat', i); }
+function removeCond(i) { removeTag('cond', i); }
+function removeItem(i) { removeTag('item', i); }
+function addCat() {
+  const v = document.getElementById('newCat').value.trim();
+  if (v) {
+    exp.categories.push(v);
+    if (!exp.sampleCounts) exp.sampleCounts = exp.categories.map(() => 1);
+    exp.sampleCounts.push(1);
+    document.getElementById('newCat').value = '';
+    renderManageLists();
+  }
+}
+function addCond() {
+  const v = document.getElementById('newCond').value.trim();
+  if (v) { exp.conditions.push(v); document.getElementById('newCond').value = ''; renderManageLists(); }
+}
+function addItem() {
+  const v = document.getElementById('newItem')?.value.trim();
+  if (v) { exp.items.push(v); document.getElementById('newItem').value = ''; renderManageLists(); }
+}
+
+// ── 平台管理函数 ──
+function addPlatform() {
+  const v = document.getElementById('newPlat').value.trim();
+  if (!v) return;
+  if (!exp.platforms) exp.platforms = [];
+  exp.platforms.push({ name: v, items: [], conditions: [], hiddenConds: [], hiddenItems: [] });
+  document.getElementById('newPlat').value = '';
+  renderPlatManageList();
+  renderTable();
+}
+
+// ── 平台条件管理函数 ──
+function addPlatCond(pli) {
+  const input = document.getElementById(`newPlatCond-${pli}`);
+  if (!input) return;
+  const v = input.value.trim();
+  if (!v) return;
+  const pl = exp.platforms[pli];
+  if (!pl.conditions) pl.conditions = [];
+  pl.conditions.push(v);
+  input.value = '';
+  renderPlatManageList();
+  renderTable();
+}
+
+function removePlatCond(pli, cdi) {
+  const pl = exp.platforms[pli];
+  if (!pl || !pl.conditions) return;
+  // 检测该条件下是否有数据
+  const hasData = Object.keys(exp.data).some(k => {
+    const parts = k.split('_');
+    if (parts.length !== 5) return false;
+    const kPli = parseInt(parts[2]), kCdi = parseInt(parts[3]);
+    if (kPli !== pli || kCdi !== cdi) return false;
+    const cell = exp.data[k];
+    return Array.isArray(cell) && cell.some(r => r && r.result !== null);
+  });
+  const condName = pl.conditions[cdi];
+  if (hasData && !confirm(`条件「${condName}」下已有测试数据，删除后数据将一并清除，确认删除？`)) return;
+  // 删除该条件的所有数据 key
+  const newData = {};
+  Object.entries(exp.data).forEach(([k, v]) => {
+    const parts = k.split('_');
+    if (parts.length === 5) {
+      const kPli = parseInt(parts[2]), kCdi = parseInt(parts[3]);
+      if (kPli === pli && kCdi === cdi) return; // 删除
+      if (kPli === pli && kCdi > cdi) parts[3] = String(kCdi - 1); // 后移
+    }
+    newData[parts.join('_')] = v;
+  });
+  exp.data = newData;
+  pl.conditions.splice(cdi, 1);
+  // 更新 hiddenConds
+  if (pl.hiddenConds) {
+    pl.hiddenConds = pl.hiddenConds.filter(h => h !== cdi).map(h => h > cdi ? h - 1 : h);
+  }
+  renderPlatManageList();
+  renderTable();
+}
+
+function toggleHidePlatCond(pli, cdi) {
+  const pl = exp.platforms[pli];
+  if (!pl) return;
+  if (!pl.hiddenConds) pl.hiddenConds = [];
+  const idx = pl.hiddenConds.indexOf(cdi);
+  if (idx === -1) pl.hiddenConds.push(cdi);
+  else pl.hiddenConds.splice(idx, 1);
+  renderPlatManageList();
+  renderTable();
+}
+
+function inlineEditPlatCond(span, pli, cdi) {
+  const arr = exp.platforms[pli].conditions;
+  const oldVal = arr[cdi];
+  const textSpan = span.querySelector('.tag-text');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldVal;
+  input.style.cssText = 'width:90px;padding:2px 6px;border:1px solid var(--primary);border-radius:4px;font-size:13px;outline:none;';
+  textSpan.replaceWith(input);
+  input.focus(); input.select();
+  const finish = () => {
+    const newVal = input.value.trim();
+    if (newVal && newVal !== oldVal) arr[cdi] = newVal;
+    renderPlatManageList();
+    renderTable();
+  };
+  input.addEventListener('blur', finish);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = oldVal; input.blur(); } });
+}
+
+// 平台条件拖拽排序
+let _platCondDragPli = -1, _platCondDragFrom = -1;
+function platCondDragStart(e, pli, idx) {
+  _platCondDragPli = pli; _platCondDragFrom = idx;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function platCondDrop(e, pli, toIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (_platCondDragPli !== pli || _platCondDragFrom === toIdx) return;
+  const fromIdx = _platCondDragFrom;
+  const arr = exp.platforms[pli].conditions;
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, moved);
+  // 重映射 data key 的 cdi 维度（只针对该平台 pli）
+  const oldToNew = buildReorderMap(arr.length, fromIdx, toIdx);
+  const newData = {};
+  Object.entries(exp.data).forEach(([k, v]) => {
+    const parts = k.split('_');
+    if (parts.length === 5 && parseInt(parts[2]) === pli) {
+      const oldCdi = parseInt(parts[3]);
+      const newCdi = oldToNew[oldCdi];
+      if (newCdi !== undefined) parts[3] = String(newCdi);
+    }
+    newData[parts.join('_')] = v;
+  });
+  exp.data = newData;
+  // 更新 hiddenConds
+  if (exp.platforms[pli].hiddenConds) {
+    const hMap = buildReorderMap(arr.length, fromIdx, toIdx);
+    exp.platforms[pli].hiddenConds = exp.platforms[pli].hiddenConds.map(h => hMap[h] ?? h);
+  }
+  _platCondDragPli = -1; _platCondDragFrom = -1;
+  renderPlatManageList();
+  renderTable();
+}
+
+function removePlatform(pli) {
+  if (!confirm(`确认删除平台「${exp.platforms[pli].name}」？该平台的所有数据也将删除。`)) return;
+  // 删除该平台所有数据 key
+  const newData = {};
+  Object.entries(exp.data).forEach(([k, v]) => {
+    const parts = k.split('_');
+    if (parts.length === 5) {
+      const kPli = parseInt(parts[2]);
+      if (kPli === pli) return; // 删除
+      if (kPli > pli) parts[2] = String(kPli - 1); // 后移
+    }
+    newData[parts.join('_')] = v;
+  });
+  exp.data = newData;
+  exp.platforms.splice(pli, 1);
+  // 更新 hiddenPlats
+  if (exp.hiddenPlats) {
+    exp.hiddenPlats = exp.hiddenPlats.filter(h => h !== pli).map(h => h > pli ? h - 1 : h);
+  }
+  renderPlatManageList();
+  renderTable();
+}
+
+function addPlatItem(pli) {
+  const input = document.getElementById(`newPlatItem-${pli}`);
+  if (!input) return;
+  const v = input.value.trim();
+  if (!v) return;
+  if (!exp.platforms[pli].items) exp.platforms[pli].items = [];
+  exp.platforms[pli].items.push(v);
+  input.value = '';
+  renderPlatManageList();
+  renderTable();
+}
+
+function removePlatItem(pli, ii) {
+  const pl = exp.platforms[pli];
+  // 检测该项目下是否有数据
+  const hasData = Object.keys(exp.data).some(k => {
+    const parts = k.split('_');
+    if (parts.length !== 5) return false;
+    const kPli = parseInt(parts[2]), kIi = parseInt(parts[4]);
+    if (kPli !== pli || kIi !== ii) return false;
+    const cell = exp.data[k];
+    return Array.isArray(cell) && cell.some(r => r && r.result !== null);
+  });
+  const itemName = pl && pl.items ? pl.items[ii] : `项目${ii+1}`;
+  if (hasData && !confirm(`项目「${itemName}」下已有测试数据，删除后数据将一并清除，确认删除？`)) return;
+  // 删除该项目数据
+  const newData = {};
+  Object.entries(exp.data).forEach(([k, v]) => {
+    const parts = k.split('_');
+    if (parts.length === 5) {
+      const kPli = parseInt(parts[2]), kIi = parseInt(parts[4]);
+      if (kPli === pli && kIi === ii) return;
+      if (kPli === pli && kIi > ii) parts[4] = String(kIi - 1);
+    }
+    newData[parts.join('_')] = v;
+  });
+  exp.data = newData;
+  exp.platforms[pli].items.splice(ii, 1);
+  renderPlatManageList();
+  renderTable();
+}
+
+function toggleHidePlat(pli) {
+  if (!exp.hiddenPlats) exp.hiddenPlats = [];
+  const idx = exp.hiddenPlats.indexOf(pli);
+  if (idx === -1) exp.hiddenPlats.push(pli);
+  else exp.hiddenPlats.splice(idx, 1);
+  renderPlatManageList();
+  renderTable();
+}
+
+function inlineEditPlatName(span, pli) {
+  const oldVal = exp.platforms[pli].name;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldVal;
+  input.style.cssText = 'width:100px;padding:2px 6px;border:1px solid var(--primary);border-radius:4px;font-size:13px;outline:none;';
+  span.replaceWith(input);
+  input.focus(); input.select();
+  const finish = () => {
+    const newVal = input.value.trim();
+    if (newVal) exp.platforms[pli].name = newVal;
+    renderPlatManageList();
+    renderTable();
+  };
+  input.addEventListener('blur', finish);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = oldVal; input.blur(); } });
+}
+
+function inlineEditPlatItem(span, pli, ii) {
+  const arr = exp.platforms[pli].items;
+  const oldVal = arr[ii];
+  const textSpan = span.querySelector('.tag-text');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = oldVal;
+  input.style.cssText = 'width:80px;padding:2px 6px;border:1px solid var(--primary);border-radius:4px;font-size:13px;outline:none;';
+  textSpan.replaceWith(input);
+  input.focus(); input.select();
+  const finish = () => {
+    const newVal = input.value.trim();
+    if (newVal && newVal !== oldVal) arr[ii] = newVal;
+    renderPlatManageList();
+  };
+  input.addEventListener('blur', finish);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = oldVal; input.blur(); } });
+}
+
+// 平台项目拖拽
+let _platItemDragPli = -1, _platItemDragFrom = -1;
+function platItemDragStart(e, pli, idx) {
+  _platItemDragPli = pli; _platItemDragFrom = idx;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function platItemDrop(e, pli, toIdx) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (_platItemDragPli !== pli || _platItemDragFrom === toIdx) return;
+  const fromIdx = _platItemDragFrom;
+  const arr = exp.platforms[pli].items;
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toIdx, 0, moved);
+  // 重映射 data key 的 ii 维度（只针对该平台 pli）
+  const oldToNew = buildReorderMap(arr.length, fromIdx, toIdx);
+  const newData = {};
+  Object.entries(exp.data).forEach(([k, v]) => {
+    const parts = k.split('_');
+    if (parts.length === 5 && parseInt(parts[2]) === pli) {
+      const oldIi = parseInt(parts[4]);
+      const newIi = oldToNew[oldIi];
+      if (newIi !== undefined) parts[4] = String(newIi);
+    }
+    newData[parts.join('_')] = v;
+  });
+  exp.data = newData;
+  renderPlatManageList();
+}
+
+// 平台拖拽排序
+let _platDragFrom = -1;
+function platDragStart(e, pli) {
+  _platDragFrom = pli;
+  e.dataTransfer.effectAllowed = 'move';
+  e.stopPropagation();
+}
+function platDrop(e, toPli) {
+  e.preventDefault(); e.stopPropagation();
+  if (_platDragFrom === toPli || _platDragFrom < 0) return;
+  const fromIdx = _platDragFrom;
+  const arr = exp.platforms;
+  const [moved] = arr.splice(fromIdx, 1);
+  arr.splice(toPli, 0, moved);
+  // 重映射 data key 的 pli 维度
+  const oldToNew = buildReorderMap(arr.length, fromIdx, toPli);
+  const newData = {};
+  Object.entries(exp.data).forEach(([k, v]) => {
+    const parts = k.split('_');
+    if (parts.length === 5) {
+      const oldPli = parseInt(parts[2]);
+      const newPli = oldToNew[oldPli];
+      if (newPli !== undefined) parts[2] = String(newPli);
+    }
+    newData[parts.join('_')] = v;
+  });
+  exp.data = newData;
+  // 更新 hiddenPlats
+  if (exp.hiddenPlats) {
+    const hOldToNew = buildReorderMap(arr.length, fromIdx, toPli);
+    exp.hiddenPlats = exp.hiddenPlats.map(h => hOldToNew[h] ?? h);
+  }
+  _platDragFrom = -1;
+  renderPlatManageList();
+}
+
+// 在表格底部直接添加分类（快捷入口）
+function openAddCatInline() {
+  const name = prompt('请输入新分类名称：');
+  if (name && name.trim()) {
+    exp.categories.push(name.trim());
+    if (!exp.sampleCounts) exp.sampleCounts = exp.categories.map(() => 1);
+    else exp.sampleCounts.push(1);
+    renderAll();
+  }
+}
+
+// 给指定分类所有样本新增一次空记录
+function addRound(ci) {
+  if (!exp.sampleCounts) exp.sampleCounts = exp.categories.map(() => 1);
+  const sampleCount = exp.sampleCounts[ci] || 1;
+  const platforms = exp.platforms || [];
+  platforms.forEach((pl, pli) => {
+    const plConds = pl.conditions || exp.conditions || [];
+    plConds.forEach((_, cdi) => {
+      (pl.items || []).forEach((_, ii) => {
+        for (let ic = 0; ic < sampleCount; ic++) {
+          const arr = getCell(ci, ic, pli, cdi, ii);
+          arr.push({ result: null, note: '' });
+          setCell(ci, ic, pli, cdi, ii, arr);
+        }
+      });
+    });
+  });
+  renderTable();
+}
+
+// 给指定分类的单个样本新增一次空记录
+function addSampleRound(ci, ic) {
+  const platforms = exp.platforms || [];
+  platforms.forEach((pl, pli) => {
+    const plConds = pl.conditions || exp.conditions || [];
+    plConds.forEach((_, cdi) => {
+      (pl.items || []).forEach((_, ii) => {
+        const arr = getCell(ci, ic, pli, cdi, ii);
+        arr.push({ result: null, note: '' });
+        setCell(ci, ic, pli, cdi, ii, arr);
+      });
+    });
+  });
+  renderTable();
+}
+
+// 删除指定样本的指定次（round索引）记录
+function deleteSampleRound(ci, ic, round) {
+  if (!confirm(`确认删除样本 ${ic + 1} 的第 ${round + 1} 次记录？此操作不可撤销。`)) return;
+  const platforms = exp.platforms || [];
+  platforms.forEach((pl, pli) => {
+    const plConds = pl.conditions || exp.conditions || [];
+    plConds.forEach((_, cdi) => {
+      (pl.items || []).forEach((_, ii) => {
+        const arr = getCell(ci, ic, pli, cdi, ii);
+        if (round < arr.length) arr.splice(round, 1);
+        setCell(ci, ic, pli, cdi, ii, arr);
+      });
+    });
+  });
+  renderTable();
+}
+
+// 给指定分类添加一个样本
+function addSample(ci) {
+  if (!exp.sampleCounts) exp.sampleCounts = exp.categories.map(() => 1);
+  exp.sampleCounts[ci] = (exp.sampleCounts[ci] || 1) + 1;
+  renderTable();
+  updateFilterCat();
+}
+
+// 删除指定分类的指定样本
+function deleteSample(ci, ic) {
+  const sampleCount = exp.sampleCounts ? exp.sampleCounts[ci] : 1;
+  if (sampleCount <= 1) {
+    alert('每个分类至少保留1个样本，无法删除。');
+    return;
+  }
+  if (!confirm(`确认删除 [${exp.categories[ci]}] 的样本 ${ic + 1}？此操作不可撤销。`)) return;
+  const total = sampleCount;
+  const platforms = exp.platforms || [];
+  platforms.forEach((pl, pli) => {
+    const plConds = pl.conditions || exp.conditions || [];
+    plConds.forEach((_, cdi) => {
+      (pl.items || []).forEach((_, ii) => {
+        for (let s = ic; s < total - 1; s++) {
+          const next = getCell(ci, s + 1, pli, cdi, ii);
+          setCell(ci, s, pli, cdi, ii, JSON.parse(JSON.stringify(next)));
+        }
+        setCell(ci, total - 1, pli, cdi, ii, []);
+      });
+    });
+  });
+  exp.sampleCounts[ci] = total - 1;
+  renderTable();
+  updateFilterCat();
+}
+function applyManage() {
+  closeModal('manageModal');
+  renderAll();
+}
+
+// ─────────────────────────────────────────────
+//  记录管理
+// ─────────────────────────────────────────────
+function saveRecord() {
+  exp.name = document.getElementById('expName').value.trim() || ('实验_' + new Date().toLocaleDateString('zh-CN'));
+  exp.note = document.getElementById('expNote').value.trim();
+  exp.createdAt = exp.createdAt || new Date().toISOString();
+
+  const idx = state.records.findIndex(r => r.id === exp.id);
+  const snapshot = JSON.parse(JSON.stringify(exp));
+  if (idx >= 0) state.records[idx] = snapshot;
+  else state.records.push(snapshot);
+  state.current = exp.id;
+  saveStore();
+  renderSidebar();
+  document.getElementById('recordCount').textContent = state.records.length + ' 条记录';
+  showToast('💾 已保存：' + exp.name);
+}
+
+function newRecord() {
+  exp = {
+    id: Date.now().toString(),
+    name: '',
+    note: '',
+    createdAt: new Date().toISOString(),
+    categories: ['分类A'],
+    conditions: ['常温25°C'],
+    items: ['项目1'],
+    platforms: [{ name: '平台A', items: ['项目1'], conditions: ['常温25°C'], hiddenConds: [], hiddenItems: [] }],
+    sampleCounts: [1],
+    hiddenCats: [],
+    hiddenConds: [],
+    hiddenItems: [],
+    hiddenPlats: [],
+    data: {},
+  };
+  state.current = null;
+  renderAll();
+  showTab('table');
+}
+
+function loadRecord(id) {
+  const rec = state.records.find(r => r.id === id);
+  if (!rec) return;
+  exp = JSON.parse(JSON.stringify(rec));
+  // 兼容旧数据：补全 sampleCounts
+  if (!exp.sampleCounts) {
+    const n = exp.sampleCount || 10;
+    exp.sampleCounts = exp.categories.map(() => n);
+  }
+  // 确保 sampleCounts 长度与 categories 一致
+  while (exp.sampleCounts.length < exp.categories.length) exp.sampleCounts.push(1);
+  // 兼容旧数据：补全 hidden 字段
+  if (!exp.hiddenCats)  exp.hiddenCats  = [];
+  if (!exp.hiddenConds) exp.hiddenConds = [];
+  if (!exp.hiddenItems) exp.hiddenItems = [];
+  if (!exp.hiddenPlats) exp.hiddenPlats = [];
+  // 兼容旧数据：若无 platforms，则从旧 items 迁移，将 data key 从 "ci_ic_cdi_ii" 迁移为 "ci_ic_0_cdi_ii"
+  if (!exp.platforms || exp.platforms.length === 0) {
+    const legacyItems = exp.items || ['项目1'];
+    const legacyConds = exp.conditions || ['常温25°C'];
+    exp.platforms = [{ name: '默认平台', items: legacyItems.slice(), conditions: legacyConds.slice(), hiddenConds: [], hiddenItems: [] }];
+    // 迁移旧数据 key
+    const newData = {};
+    Object.entries(exp.data || {}).forEach(([k, v]) => {
+      const parts = k.split('_');
+      if (parts.length === 4) {
+        // 旧格式 ci_ic_cdi_ii → 新格式 ci_ic_0_cdi_ii
+        const [ci, ic, cdi, ii] = parts;
+        newData[`${ci}_${ic}_0_${cdi}_${ii}`] = v;
+      } else {
+        newData[k] = v;
+      }
+    });
+    exp.data = newData;
+  } else {
+    // 已有 platforms：检查每个平台是否有 conditions，若无则从全局 exp.conditions 迁移
+    const legacyConds = exp.conditions || [];
+    exp.platforms.forEach(pl => {
+      if (!pl.conditions || pl.conditions.length === 0) {
+        pl.conditions = legacyConds.slice();
+      }
+      if (!pl.hiddenConds) pl.hiddenConds = [];
+      if (!pl.hiddenItems) pl.hiddenItems = [];
+    });
+  }
+  state.current = id;
+  renderAll();
+  showTab('table');
+}
+
+function deleteRecord(id) {
+  if (!confirm('确认删除该实验记录？')) return;
+  state.records = state.records.filter(r => r.id !== id);
+  if (state.current === id) {
+    if (state.records.length > 0) loadRecord(state.records[state.records.length-1].id);
+    else { initData(); renderAll(); }
+  }
+  saveStore();
+  renderSidebar();
+  document.getElementById('recordCount').textContent = state.records.length + ' 条记录';
+}
+
+function duplicateRecord(id) {
+  const rec = state.records.find(r => r.id === id);
+  if (!rec) return;
+  const copy = JSON.parse(JSON.stringify(rec));
+  copy.id = Date.now().toString();
+  copy.name = copy.name + ' (副本)';
+  copy.createdAt = new Date().toISOString();
+  copy.data = {};  // 清空数据，只复制结构
+  state.records.push(copy);
+  saveStore();
+  loadRecord(copy.id);
+}
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const icon = document.getElementById('sidebarToggleIcon');
+  const collapsed = sb.classList.toggle('collapsed');
+  icon.textContent = collapsed ? '▶' : '◀';
+}
+
+function renderSidebar() {
+  const el = document.getElementById('recordList');
+  if (!state.records.length) {
+    el.innerHTML = '<div class="no-results">暂无记录</div>';
+    return;
+  }
+  el.innerHTML = [...state.records].reverse().map(rec => {
+    const active = rec.id === state.current ? 'active' : '';
+    const date = new Date(rec.createdAt).toLocaleDateString('zh-CN');
+    const totalPass = countResults(rec.data, 'pass');
+    const totalFail = countResults(rec.data, 'fail');
+    return `<div class="record-item ${active}" onclick="loadRecord('${rec.id}')">
+      <div class="rec-name">${escHtml(rec.name || '未命名')}</div>
+      <div class="rec-meta">${date} · ${totalPass}P ${totalFail}F</div>
+      <div class="rec-actions">
+        <span class="rec-btn" onclick="event.stopPropagation();duplicateRecord('${rec.id}')">复制结构</span>
+        <span class="rec-btn del" onclick="event.stopPropagation();deleteRecord('${rec.id}')">删除</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function countResults(data, type) {
+  let n = 0;
+  Object.values(data).forEach(arr => arr.forEach(r => { if (r && r.result === type) n++; }));
+  return n;
+}
+
+// ─────────────────────────────────────────────
+//  搜索/筛选
+// ─────────────────────────────────────────────
+function applyFilter() { renderTable(); }
+function clearFilter() {
+  document.getElementById('searchText').value = '';
+  msClearAll('result');
+  msClearAll('cat');
+  msClearAll('plat');
+  msClearAll('cond');
+  msClearAll('item');
+  msClearAll('round');
+  renderTable();
+}
+function updateFilterCat() {
+  msRebuild('cat', exp.categories);
+}
+function updateFilterPlat() {
+  const platforms = exp.platforms || [];
+  msRebuild('plat', platforms.map(pl => pl.name));
+}
+function updateFilterCond() {
+  // 收集所有平台下的条件（去重）
+  const platforms = exp.platforms || [];
+  const allConds = [];
+  platforms.forEach(pl => {
+    const plConds = pl.conditions || exp.conditions || [];
+    plConds.forEach(c => {
+      if (!allConds.includes(c)) allConds.push(c);
+    });
+  });
+  msRebuild('cond', allConds);
+}
+function updateFilterItem() {
+  // 收集所有平台下的项目（去重）
+  const platforms = exp.platforms || [];
+  const allItems = [];
+  platforms.forEach(pl => {
+    (pl.items || []).forEach(item => {
+      if (!allItems.includes(item)) allItems.push(item);
+    });
+  });
+  msRebuild('item', allItems);
+}
+
+// 初始化结果多选筛选（固定选项，只需调一次，切换记录不用重建）
+function initResultFilter() {
+  const opts = [
+    { value: 'pass',    label: '🟢 有 Pass' },
+    { value: 'fail',    label: '🟠 有 Fail' },
+    { value: 'allpass', label: '✅ 全 Pass（某条件全部通过）' },
+    { value: 'allfail', label: '❌ 全 Fail（某条件全部失败）' },
+  ];
+  _msData.result = opts.map(o => o.value);
+  const listEl = document.getElementById('mslist-result');
+  if (!listEl) return;
+  listEl.innerHTML = opts.map(o => {
+    const checked = _msState.result.has(o.value) ? 'checked' : '';
+    return `<label class="ms-item">
+      <input type="checkbox" ${checked} onchange="msToggleItem('result', this.value, this.checked)" value="${o.value}">
+      <span>${o.label}</span>
+    </label>`;
+  }).join('');
+  msUpdateBtn('result');
+}
+// ── 多选下拉组件（Multi-Select Dropdown）──
+// key: 'cat' | 'cond' | 'item'
+// 内部状态：每个 key 维护一个 Set<string>，存已选中的值
+const _msState = { cat: new Set(), cond: new Set(), item: new Set(), round: new Set(), result: new Set(), plat: new Set() };
+const _msData  = { cat: [], cond: [], item: [], round: [], result: [], plat: [] };  // 当前选项列表
+
+function msRebuild(key, arr) {
+  _msData[key] = arr.slice();
+  // 清除已不存在的选项
+  for (const v of [..._msState[key]]) {
+    if (!arr.includes(v)) _msState[key].delete(v);
+  }
+  msRenderList(key);
+  msUpdateBtn(key);
+}
+
+function msRenderList(key) {
+  const listEl = document.getElementById(`mslist-${key}`);
+  if (!listEl) return;
+  listEl.innerHTML = _msData[key].map(v => {
+    const checked = _msState[key].has(v) ? 'checked' : '';
+    const esc = escHtml(v);
+    return `<label class="ms-item">
+      <input type="checkbox" ${checked} onchange="msToggleItem('${key}', this.value, this.checked)" value="${esc}">
+      <span>${esc}</span>
+    </label>`;
+  }).join('');
+}
+
+function msUpdateBtn(key) {
+  const sel = _msState[key];
+  const btn = document.getElementById(`msbtn-${key}`);
+  const lbl = document.getElementById(`mslabel-${key}`);
+  if (!btn || !lbl) return;
+  const names = { cat: '分类', plat: '平台', cond: '条件', item: '项目', round: '次数', result: '结果' };
+  const resultLabels = { pass: 'Pass', fail: 'Fail', allpass: '全Pass', allfail: '全Fail' };
+  if (sel.size === 0) {
+    lbl.textContent = `全部${names[key] || key}`;
+    btn.classList.remove('active');
+  } else if (sel.size === 1) {
+    const v = [...sel][0];
+    if (key === 'round') lbl.textContent = `第 ${Number(v)+1} 次`;
+    else if (key === 'result') lbl.textContent = resultLabels[v] || v;
+    else lbl.textContent = v;
+    btn.classList.add('active');
+  } else {
+    if (key === 'result') {
+      lbl.textContent = [...sel].map(v => resultLabels[v] || v).join('/');
+    } else {
+      lbl.textContent = `${names[key]}(${sel.size})`;
+    }
+    btn.classList.add('active');
+  }
+}
+
+function msToggleItem(key, val, checked) {
+  if (checked) _msState[key].add(val);
+  else _msState[key].delete(val);
+  msUpdateBtn(key);
+  applyFilter();
+}
+
+function msSelectAll(key) {
+  _msData[key].forEach(v => _msState[key].add(v));
+  msRenderList(key);
+  msUpdateBtn(key);
+  applyFilter();
+}
+
+function msClearAll(key) {
+  _msState[key].clear();
+  msRenderList(key);
+  msUpdateBtn(key);
+  applyFilter();
+}
+
+function msGetSelected(key) {
+  return new Set(_msState[key]);  // 返回副本
+}
+
+function msToggle(key) {
+  const panel = document.getElementById(`mspanel-${key}`);
+  const btn   = document.getElementById(`msbtn-${key}`);
+  if (!panel) return;
+  const isOpen = panel.classList.contains('show');
+  // 关闭所有面板
+  ['result','cat','plat','cond','item','round'].forEach(k => {
+    document.getElementById(`mspanel-${k}`)?.classList.remove('show');
+    document.getElementById(`msbtn-${k}`)?.classList.remove('open');
+  });
+  if (!isOpen) {
+    panel.classList.add('show');
+    btn.classList.add('open');
+  }
+}
+
+// 点击外部关闭面板
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.ms-wrap')) {
+    ['result','cat','plat','cond','item','round'].forEach(k => {
+      document.getElementById(`mspanel-${k}`)?.classList.remove('show');
+      document.getElementById(`msbtn-${k}`)?.classList.remove('open');
+    });
+  }
+});
+
+function updateFilterRound(maxRounds) {
+  // 生成 "0","1",... 的字符串数组，显示标签为 "第1次","第2次"...
+  const arr = Array.from({length: maxRounds}, (_, i) => String(i));
+  // 临时保存并重建，msRebuild 会清理不存在的选项
+  const prevLabels = _msData.round.slice();
+  _msData.round = arr;
+  // 清除超出范围的选项
+  for (const v of [..._msState.round]) {
+    if (!arr.includes(v)) _msState.round.delete(v);
+  }
+  // 渲染时用"第N次"作显示文本
+  const listEl = document.getElementById('mslist-round');
+  if (listEl) {
+    listEl.innerHTML = arr.map(v => {
+      const checked = _msState.round.has(v) ? 'checked' : '';
+      const label = `第 ${Number(v)+1} 次`;
+      return `<label class="ms-item">
+        <input type="checkbox" ${checked} onchange="msToggleItem('round', this.value, this.checked)" value="${v}">
+        <span>${label}</span>
+      </label>`;
+    }).join('');
+  }
+  msUpdateBtn('round');
+}
+
+// ─────────────────────────────────────────────
+//  导出 Excel
+// ─────────────────────────────────────────────
+function exportExcel() {
+  const { categories } = exp;
+  const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
+  if (!exp.sampleCounts) exp.sampleCounts = categories.map(() => exp.sampleCount || 1);
+  const wb = XLSX.utils.book_new();
+  const rows = [];
+
+  // 表头行：分类, ic, 平台-条件-项目, ...
+  const h1 = ['分类', 'ic'];
+  platforms.forEach(pl => {
+    const plConds = pl.conditions || exp.conditions || [];
+    plConds.forEach(cond => {
+      (pl.items || []).forEach(item => h1.push(`${pl.name}|${cond}|${item}`));
+      h1.push(`${pl.name}|${cond}|总结`);
+    });
+  });
+  rows.push(h1);
+
+  // 数据行
+  categories.forEach((cat, ci) => {
+    const sampleCount = exp.sampleCounts[ci] || 1;
+    for (let ic = 0; ic < sampleCount; ic++) {
+      const row = [cat, ic + 1];
+      platforms.forEach((pl, pli) => {
+        const plConds = pl.conditions || exp.conditions || [];
+        plConds.forEach((_, cdi) => {
+          let allPass = true, anyResult = false, allHave = true;
+          (pl.items || []).forEach((_, ii) => {
+            const cell = getCell(ci, ic, pli, cdi, ii);
+            const vals = cell.filter(r => r).map(r => (r.result === 'pass' ? 'P' : 'F') + (r.note ? `(${r.note})` : '')).join(' ');
+            if (cell.length === 0) { allHave = false; }
+            else { anyResult = true; if (!cell[cell.length-1] || cell[cell.length-1].result !== 'pass') allPass = false; }
+            row.push(vals);
+          });
+          let summary = '';
+          if (anyResult) summary = (allHave && allPass) ? 'Pass' : (allHave && !allPass) ? 'Fail' : (!allPass ? 'Fail' : '…');
+          row.push(summary);
+        });
+      });
+      rows.push(row);
+    }
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = h1.map(() => ({ wch: 16 }));
+  XLSX.utils.book_append_sheet(wb, ws, '实验数据');
+
+  // 统计 sheet
+  const sRows = [['分类', '平台', '条件', '样本总数', 'Pass样本', 'Fail样本', '通过率']];
+  categories.forEach((cat, ci) => {
+    const sampleCount = exp.sampleCounts[ci] || 1;
+    platforms.forEach((pl, pli) => {
+      const plConds = pl.conditions || exp.conditions || [];
+      plConds.forEach((cond, cdi) => {
+        let passCount = 0, failCount = 0, totalSamples = 0;
+        for (let ic = 0; ic < sampleCount; ic++) {
+          let allPass = true, allHave = true, anyResult = false;
+          (pl.items || []).forEach((_, ii) => {
+            const cell = getCell(ci, ic, pli, cdi, ii);
+            if (cell.length === 0) allHave = false;
+            else { anyResult = true; if (cell[cell.length-1].result !== 'pass') allPass = false; }
+          });
+          if (anyResult) {
+            totalSamples++;
+            if (allHave && allPass) passCount++; else failCount++;
+          }
+        }
+        sRows.push([cat, pl.name, cond, totalSamples, passCount, failCount,
+          totalSamples > 0 ? (passCount/totalSamples*100).toFixed(1)+'%' : '-']);
+      });
+    });
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(sRows);
+  XLSX.utils.book_append_sheet(wb, ws2, '统计汇总');
+
+  const fname = (exp.name || '实验记录') + '_' + new Date().toLocaleDateString('zh-CN').replace(/\//g,'-') + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  showToast('✅ 已导出：' + fname);
+}
+
+// ─────────────────────────────────────────────
+//  导入 Excel
+// ─────────────────────────────────────────────
+function importExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      if (rows.length < 2) { showToast('❌ 文件格式不正确，数据行不足'); return; }
+
+      const header = rows[0].map(h => String(h).trim());
+      if (header[0] !== '分类' || header[1] !== 'ic') {
+        showToast('❌ 请导入本系统导出的Excel文件（第一列需为"分类"）'); return;
+      }
+
+      // 解析平台/条件/项目（新格式：平台|条件|项目 或 旧格式：条件 - 项目）
+      const conditions = [];
+      const platformsMap = {}; // name -> { items: [], conditions: [] }
+      const colMap = [];
+
+      for (let col = 2; col < header.length; col++) {
+        const h = header[col];
+        // 新格式：平台|条件|项目
+        if (h.includes('|')) {
+          const parts = h.split('|');
+          const platName = parts[0].trim(), cond = parts[1].trim(), item = parts[2].trim();
+          if (!conditions.includes(cond)) conditions.push(cond);
+          if (!platformsMap[platName]) platformsMap[platName] = { items: [], conditions: [] };
+          if (!platformsMap[platName].conditions.includes(cond)) platformsMap[platName].conditions.push(cond);
+          const platConds = platformsMap[platName].conditions;
+          const cdi = platConds.indexOf(cond);
+          if (item === '总结') {
+            colMap.push({ platName, cdi, isSum: true });
+          } else {
+            let ii = platformsMap[platName].items.indexOf(item);
+            if (ii < 0) { platformsMap[platName].items.push(item); ii = platformsMap[platName].items.length - 1; }
+            colMap.push({ platName, cdi, ii, isSum: false });
+          }
+        } else {
+          // 旧格式兼容：条件 - 项目
+          const sep = h.indexOf(' - ');
+          if (sep < 0) { colMap.push(null); continue; }
+          const cond = h.substring(0, sep).trim(), item = h.substring(sep + 3).trim();
+          if (!conditions.includes(cond)) conditions.push(cond);
+          const platName = '默认平台';
+          if (!platformsMap[platName]) platformsMap[platName] = { items: [], conditions: [] };
+          if (!platformsMap[platName].conditions.includes(cond)) platformsMap[platName].conditions.push(cond);
+          const platConds = platformsMap[platName].conditions;
+          const cdi = platConds.indexOf(cond);
+          if (item === '总结') {
+            colMap.push({ platName, cdi, isSum: true });
+          } else {
+            let ii = platformsMap[platName].items.indexOf(item);
+            if (ii < 0) { platformsMap[platName].items.push(item); ii = platformsMap[platName].items.length - 1; }
+            colMap.push({ platName, cdi, ii, isSum: false });
+          }
+        }
+      }
+
+      const platforms = Object.entries(platformsMap).map(([name, v]) => ({
+        name, items: v.items, conditions: v.conditions, hiddenConds: [], hiddenItems: []
+      }));
+      const platNameToIdx = {};
+      platforms.forEach((pl, i) => { platNameToIdx[pl.name] = i; });
+
+      if (!conditions.length || !platforms.length) {
+        showToast('❌ 无法解析条件和平台，请确认导出格式正确'); return;
+      }
+
+      const categories = [];
+      const sampleCounts = [];
+      const dataRows = rows.slice(1);
+      dataRows.forEach(row => {
+        const cat = String(row[0] || '').trim();
+        if (!cat) return;
+        let ci = categories.indexOf(cat);
+        if (ci < 0) { categories.push(cat); sampleCounts.push(0); ci = categories.length - 1; }
+        sampleCounts[ci]++;
+      });
+
+      const data = {};
+      const catIcMap = {};
+      dataRows.forEach(row => {
+        const cat = String(row[0] || '').trim();
+        if (!cat) return;
+        const ci = categories.indexOf(cat);
+        if (ci < 0) return;
+        if (catIcMap[ci] === undefined) catIcMap[ci] = 0;
+        const ic = catIcMap[ci]++;
+
+        colMap.forEach((info, colIdx) => {
+          if (!info || info.isSum) return;
+          const { platName, cdi, ii } = info;
+          const pli = platNameToIdx[platName];
+          if (pli === undefined) return;
+          const cellVal = String(row[colIdx + 2] || '').trim();
+          if (!cellVal) return;
+          const key = `${ci}_${ic}_${pli}_${cdi}_${ii}`;
+          const results = [];
+          const parts = cellVal.match(/[PFpf][^PFpf]*/g) || [];
+          parts.forEach(part => {
+            const p = part.trim();
+            const isPass = p[0].toUpperCase() === 'P';
+            const noteMatch = p.match(/\(([^)]*)\)/);
+            results.push({ result: isPass ? 'pass' : 'fail', note: noteMatch ? noteMatch[1] : '' });
+          });
+          if (results.length) data[key] = results;
+        });
+      });
+
+      const platNames = platforms.map(p => p.name).join('、');
+      if (!confirm(
+        `解析完成！\n分类：${categories.join('、')}\n条件：${conditions.join('、')}\n平台：${platNames}\n\n是否以此数据创建新实验记录？`
+      )) return;
+
+      exp = {
+        id: Date.now().toString(),
+        name: file.name.replace(/\.(xlsx|xls)$/i, ''),
+        note: '从Excel导入',
+        createdAt: new Date().toISOString(),
+        categories,
+        conditions,
+        items: platforms.flatMap(p => p.items),
+        platforms,
+        sampleCounts,
+        hiddenCats: [], hiddenConds: [], hiddenItems: [], hiddenPlats: [],
+        data,
+      };
+      state.current = null;
+      renderAll();
+      showTab('table');
+      showToast(`✅ 导入成功：${categories.length}个分类，${sampleCounts.reduce((a,b)=>a+b,0)}个样本`);
+    } catch (err) {
+      console.error(err);
+      showToast('❌ 导入失败：' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─────────────────────────────────────────────
+//  统计图表
+// ─────────────────────────────────────────────
+let chartInstances = {};
+function renderStats() {
+  const { categories } = exp;
+  const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
+  if (!exp.sampleCounts) exp.sampleCounts = categories.map(() => exp.sampleCount || 1);
+
+  // 统计卡
+  let totalPass = 0, totalFail = 0;
+  Object.values(exp.data).forEach(arr => arr.forEach(r => {
+    if (!r) return;
+    if (r.result === 'pass') totalPass++;
+    else totalFail++;
+  }));
+  const total = totalPass + totalFail;
+  const totalSamples = exp.sampleCounts.reduce((a, b) => a + b, 0);
+
+  // 收集所有条件（各平台去重合并，仅用于显示总数）
+  const allCondsSet = new Set();
+  platforms.forEach(pl => (pl.conditions || exp.conditions || []).forEach(c => allCondsSet.add(c)));
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card pass"><div class="val">${totalPass}</div><div class="lbl">总 Pass 次</div></div>
+    <div class="stat-card fail"><div class="val">${totalFail}</div><div class="lbl">总 Fail 次</div></div>
+    <div class="stat-card"><div class="val">${total > 0 ? (totalPass/total*100).toFixed(1)+'%' : '-'}</div><div class="lbl">整体通过率</div></div>
+    <div class="stat-card"><div class="val">${categories.length}</div><div class="lbl">分类数</div></div>
+    <div class="stat-card"><div class="val">${totalSamples}</div><div class="lbl">样本总数</div></div>
+    <div class="stat-card"><div class="val">${allCondsSet.size}</div><div class="lbl">测试条件</div></div>
+  `;
+
+  // 各分类通过率
+  const catPassRates = categories.map((_, ci) => {
+    const sampleCount = exp.sampleCounts[ci] || 1;
+    let passCount = 0, tot = 0;
+    for (let ic = 0; ic < sampleCount; ic++) {
+      platforms.forEach((pl, pli) => {
+        const plConds = pl.conditions || exp.conditions || [];
+        plConds.forEach((_, cdi) => {
+          const items = pl.items || [];
+          let allPass = true, allHave = true, anyResult = false;
+          items.forEach((_, ii) => {
+            const cell = getCell(ci, ic, pli, cdi, ii);
+            if (cell.length === 0) allHave = false;
+            else { anyResult = true; if (cell[cell.length-1].result !== 'pass') allPass = false; }
+          });
+          if (anyResult) { tot++; if (allHave && allPass) passCount++; }
+        });
+      });
+    }
+    return tot > 0 ? +(passCount/tot*100).toFixed(1) : 0;
+  });
+  drawChart('chartPassRate', 'bar', categories, [{
+    label: '通过率 (%)', data: catPassRates,
+    backgroundColor: catPassRates.map(v => v >= 80 ? '#22c55e88' : v >= 50 ? '#f9731688' : '#ef444488'),
+    borderColor: catPassRates.map(v => v >= 80 ? '#22c55e' : v >= 50 ? '#f97316' : '#ef4444'),
+    borderWidth: 2, borderRadius: 6,
+  }], { scales: { y: { max: 100, ticks: { callback: v => v+'%' } } } });
+
+  // 各条件 Pass/Fail（按平台各自条件统计，合并同名条件）
+  const condPassMap = {}, condFailMap = {};
+  platforms.forEach((pl, pli) => {
+    const plConds = pl.conditions || exp.conditions || [];
+    plConds.forEach((cond, cdi) => {
+      if (!condPassMap[cond]) { condPassMap[cond] = 0; condFailMap[cond] = 0; }
+      categories.forEach((_, ci) => {
+        const sampleCount = exp.sampleCounts[ci] || 1;
+        for (let ic = 0; ic < sampleCount; ic++) {
+          const items = pl.items || [];
+          let allPass = true, allHave = true, anyResult = false;
+          items.forEach((_, ii) => {
+            const cell = getCell(ci, ic, pli, cdi, ii);
+            if (cell.length === 0) allHave = false;
+            else { anyResult = true; if (cell[cell.length-1].result !== 'pass') allPass = false; }
+          });
+          if (anyResult && allHave && allPass) condPassMap[cond]++;
+          else if (anyResult && !(allHave && allPass)) condFailMap[cond]++;
+        }
+      });
+    });
+  });
+  const condLabels = [...allCondsSet];
+  drawChart('chartCondDist', 'bar', condLabels, [
+    { label: 'Pass', data: condLabels.map(c => condPassMap[c]||0), backgroundColor: '#22c55e88', borderColor: '#22c55e', borderWidth: 2, borderRadius: 4 },
+    { label: 'Fail', data: condLabels.map(c => condFailMap[c]||0), backgroundColor: '#f9731688', borderColor: '#f97316', borderWidth: 2, borderRadius: 4 },
+  ], {});
+
+  // 各平台通过率
+  const platLabels = platforms.map(pl => pl.name);
+  const platPassRates = platforms.map((pl, pli) => {
+    const plConds = pl.conditions || exp.conditions || [];
+    const items = pl.items || [];
+    let p = 0, f = 0;
+    categories.forEach((_, ci) => {
+      const sampleCount = exp.sampleCounts[ci] || 1;
+      for (let ic = 0; ic < sampleCount; ic++) {
+        plConds.forEach((_, cdi) => {
+          items.forEach((_, ii) => {
+            const cell = getCell(ci, ic, pli, cdi, ii);
+            if (cell.length > 0) {
+              if (cell[cell.length-1].result === 'pass') p++; else f++;
+            }
+          });
+        });
+      }
+    });
+    return p + f > 0 ? +(p/(p+f)*100).toFixed(1) : 0;
+  });
+  drawChart('chartItemPass', 'bar', platLabels, [{
+    label: '通过率 (%)', data: platPassRates,
+    backgroundColor: '#3b82f688', borderColor: '#3b82f6', borderWidth: 2, borderRadius: 6,
+  }], { indexAxis: 'y', scales: { x: { max: 100, ticks: { callback: v => v+'%' } } } });
+
+  // Pass/Fail 总览
+  drawChart('chartTotal', 'doughnut', ['Pass', 'Fail'], [{
+    data: [totalPass, totalFail],
+    backgroundColor: ['#22c55e', '#f97316'],
+    borderWidth: 0,
+  }], { plugins: { legend: { position: 'bottom' } } });
+}
+
+function drawChart(id, type, labels, datasets, extraOpts = {}) {
+  if (chartInstances[id]) chartInstances[id].destroy();
+  const ctx = document.getElementById(id).getContext('2d');
+  chartInstances[id] = new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: datasets.length > 1 } },
+      ...extraOpts,
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+//  工具函数
+// ─────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1e293b;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,.3);transition:opacity .3s';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+// 点击遮罩关闭弹窗
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('show'); });
+});
+
+// ─────────────────────────────────────────────
+//  固定横向滚动条（始终显示在视口底部）
+// ─────────────────────────────────────────────
+(function() {
+  // 创建固定滚动条容器
+  const fixedBar = document.createElement('div');
+  fixedBar.id = 'fixed-hscroll';
+  fixedBar.style.cssText = `
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 14px; overflow-x: scroll; overflow-y: hidden;
+    z-index: 200; background: #f1f5f9;
+    border-top: 1px solid #e2e8f0;
+  `;
+  const fixedInner = document.createElement('div');
+  fixedInner.id = 'fixed-hscroll-inner';
+  fixedBar.appendChild(fixedInner);
+  document.body.appendChild(fixedBar);
+
+  let tc = null; // .table-container
+  let syncing = false;
+
+  function initScrollSync() {
+    tc = document.querySelector('.table-container');
+    if (!tc) return;
+    // 同步宽度
+    fixedInner.style.width = tc.scrollWidth + 'px';
+    fixedInner.style.height = '1px';
+
+    // 固定滚动条 → 表格
+    fixedBar.addEventListener('scroll', () => {
+      if (syncing) return;
+      syncing = true;
+      tc.scrollLeft = fixedBar.scrollLeft;
+      syncing = false;
+    });
+    // 表格 → 固定滚动条
+    tc.addEventListener('scroll', () => {
+      if (syncing) return;
+      syncing = true;
+      fixedBar.scrollLeft = tc.scrollLeft;
+      syncing = false;
+    });
+  }
+
+  // 每次 renderAll 后更新滚动条宽度
+  const origRenderAll = window.renderAll;
+  if (typeof origRenderAll === 'function') {
+    window.renderAll = function(...args) {
+      origRenderAll.apply(this, args);
+      setTimeout(() => {
+        tc = document.querySelector('.table-container');
+        if (tc && fixedInner) fixedInner.style.width = tc.scrollWidth + 'px';
+        // 同步 left sidebar 宽度
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) {
+          const sideW = sidebar.getBoundingClientRect().width;
+          fixedBar.style.left = sideW + 'px';
+        }
+      }, 50);
+    };
+  }
+
+  // 初始化：等 DOM 稳定后再绑定
+  setTimeout(() => {
+    initScrollSync();
+    // 同步 sidebar 宽度
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+      const sideW = sidebar.getBoundingClientRect().width;
+      fixedBar.style.left = sideW + 'px';
+    }
+  }, 500);
+
+  // 监听 sidebar 折叠/展开，更新 left 偏移
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+      setTimeout(() => {
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) fixedBar.style.left = sidebar.getBoundingClientRect().width + 'px';
+      }, 250);
+    });
+  }
+})();
+</script>
+</body>
+</html>

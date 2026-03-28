@@ -1,0 +1,41 @@
+{
+  "records": [
+    {
+      "id": "example-001",
+      "name": "示例批次 A",
+      "icCount": 3,
+      "platforms": [
+        {
+          "name": "Android",
+          "items": ["启动时间", "功耗", "稳定性"],
+          "conditions": ["常温 25°C", "高温 45°C"],
+          "hiddenConds": [],
+          "hiddenItems": []
+        },
+        {
+          "name": "iOS",
+          "items": ["启动时间", "功耗"],
+          "conditions": ["常温 25°C"],
+          "hiddenConds": [],
+          "hiddenItems": []
+        }
+      ],
+      "hiddenPlats": [],
+      "cells": {
+        "0_0_0_0_0": { "result": "P", "note": "" },
+        "0_0_0_0_1": { "result": "P", "note": "" },
+        "0_0_0_0_2": { "result": "P", "note": "" },
+        "0_1_0_0_0": { "result": "F", "note": "启动超时 3s" },
+        "0_1_0_0_1": { "result": "P", "note": "" },
+        "0_1_0_0_2": { "result": "P", "note": "" },
+        "0_2_0_0_0": { "result": "P", "note": "" },
+        "0_2_0_0_1": { "result": "P", "note": "" },
+        "0_2_0_0_2": { "result": "P", "note": "" }
+      },
+      "createdAt": "2026-03-28T00:00:00.000Z"
+    }
+  ],
+  "categories": [
+    { "id": "cat-001", "name": "示例批次 A", "hidden": false }
+  ]
+}
