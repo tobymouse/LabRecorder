@@ -1,0 +1,13 @@
+{
+  "name": "labrecord",
+  "version": "1.0.0",
+  "description": "实验记录系统 MCP Server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "mcp-server": "node mcp-server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0"
+  }
+}

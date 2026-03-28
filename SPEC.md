@@ -189,7 +189,44 @@ JS 实现，`position: fixed; bottom: 0`，与 `.table-container` 双向同步 `
 
 ---
 
-## 6. 未来规划（Backlog）
+## 6. MCP Server（mcp-server.js）
+
+独立 MCP Server，stdio 模式，供 WorkBuddy / Claude Desktop 等 AI 助手接入。
+
+### 工具列表
+
+| 工具名 | 说明 |
+|--------|------|
+| `list_records` | 列出所有实验记录（id、名称、通过率） |
+| `get_record` | 获取某条实验的完整结构（平台/条件/项目） |
+| `get_results` | 查询测试结果，支持按平台/条件/项目/P-F筛选 |
+| `get_pass_rate` | 按平台/条件分组汇总通过率 |
+| `get_fail_list` | 获取所有 Fail 列表（含位置+备注，适合提 Issue） |
+| `add_result` | 写入一条 P/F 结果 |
+
+### WorkBuddy 配置
+
+在 WorkBuddy MCP 配置中添加：
+
+```json
+{
+  "command": "node",
+  "args": ["d:/workspace/WorkBuddy/LabRecord/mcp-server.js"],
+  "name": "labrecord"
+}
+```
+
+### 依赖
+
+```
+@modelcontextprotocol/sdk
+```
+
+安装：`npm install`（项目根目录）
+
+---
+
+## 7. 未来规划（Backlog）
 
 - [ ] 多用户 / 网络同步
 - [ ] Excel 导出带颜色格式
