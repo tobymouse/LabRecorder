@@ -88,10 +88,31 @@
   .sidebar.collapsed ~ .main { margin-left: 36px; max-width: calc(100vw - 36px); }
 
   /* ── 工具栏 ── */
+  .toolbar-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 16px;
+  }
   .toolbar {
     background: #fff; border-radius: 10px; padding: 14px 16px;
-    margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 10px;
+    display: flex; flex-wrap: wrap; gap: 10px;
     align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+  .toolbar-container .toolbar:first-child {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    margin-bottom: 0;
+  }
+  .toolbar-container .toolbar:last-child {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    margin-top: 0;
+  }
+  .toolbar-divider {
+    height: 1px;
+    background: #e2e8f0;
+    margin: 0;
   }
   .toolbar input[type=text] {
     padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px;
@@ -140,7 +161,7 @@
   .ms-panel.show { display: block; }
   .ms-panel-head {
     display: flex; gap: 4px; padding: 6px 8px 4px;
-    border-bottom: 1px solid #f1f5f9; font-size: 12px;
+    font-size: 12px;
   }
   .ms-panel-head button {
     flex: 1; padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px;
@@ -533,109 +554,112 @@
 
     <!-- 表格视图 -->
     <div id="view-table">
-      <!-- 工具栏 -->
-      <div class="toolbar" id="toolbar">
-        <input type="text" id="expName" placeholder="实验名称" style="width:200px">
-        <span id="expNotePreview" onclick="openNoteModal()" title="点击编辑实验备注"
-          style="display:inline-flex;align-items:center;gap:6px;max-width:160px;font-size:13px;color:#374151;border:1px solid var(--border);border-radius:6px;padding:6px 12px;background:#fff;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-          <span id="expNoteText" style="overflow:hidden;text-overflow:ellipsis;flex:1;">备注（可选）</span>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;"><path d="M11.5 2.5a2.121 2.121 0 1 1 3 3L5 15H1v-4L11.5 2.5z"/></svg>
-        </span>
-        <span style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px;" title="目标通过率，低于此值显示青绿">目标PR：<input type="number" id="expTargetPR" min="0" max="100" step="1" value="80" style="width:52px;font-size:12px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:#fff;">%</span>
-        <span style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px;" title="报警通过率，低于此值显示红色">报警PR：<input type="number" id="expAlarmPR" min="0" max="100" step="1" value="60" style="width:52px;font-size:12px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:#fff;">%</span>
-        <button class="btn" style="font-size:12px;padding:2px 10px;background:#f1f5f9;color:#374151;border:none;border-radius:4px;cursor:pointer;" title="按目标PR/报警PR刷新表格颜色" onclick="renderTable();">↺ 刷新</button>
-        <div class="toolbar-sep"></div>
-        <button class="btn btn-outline" style="background:#f1f5f9;color:#374151;" onclick="exportExcel()">⬇ 导出 Excel</button>
-        <label class="btn btn-outline" style="background:#eff6ff;color:#1d4ed8;cursor:pointer;" title="导入之前导出的Excel文件">
-          ⬆ 导入 Excel
-          <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)">
-        </label>
-        <button class="btn btn-success" onclick="saveRecord()">💾 保存</button>
-      </div>
+      <!-- 工具栏容器 -->
+      <div class="toolbar-container">
+        <!-- 工具栏第一行：实验信息 -->
+        <div class="toolbar" id="toolbar">
+          <input type="text" id="expName" placeholder="实验名称" style="width:200px">
+          <span id="expNotePreview" onclick="openNoteModal()" title="点击编辑实验备注"
+            style="display:inline-flex;align-items:center;gap:6px;max-width:160px;font-size:13px;color:#374151;border:1px solid var(--border);border-radius:6px;padding:6px 12px;background:#fff;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            <span id="expNoteText" style="overflow:hidden;text-overflow:ellipsis;flex:1;">备注（可选）</span>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#1e293b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;"><path d="M11.5 2.5a2.121 2.121 0 1 1 3 3L5 15H1v-4L11.5 2.5z"/></svg>
+          </span>
+          <span style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px;" title="目标通过率，低于此值显示青绿">目标PR：<input type="number" id="expTargetPR" min="0" max="100" step="1" value="80" style="width:52px;font-size:12px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:#fff;">%</span>
+          <span style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px;" title="报警通过率，低于此值显示红色">报警PR：<input type="number" id="expAlarmPR" min="0" max="100" step="1" value="60" style="width:52px;font-size:12px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:#fff;">%</span>
+          <button class="btn" style="font-size:12px;padding:2px 10px;background:#f1f5f9;color:#374151;border:none;border-radius:4px;cursor:pointer;" title="按目标PR/报警PR刷新表格颜色" onclick="renderTable();">↺ 刷新</button>
+          <div style="flex: 1"></div>
+          <button class="btn btn-outline" style="background:#f1f5f9;color:#374151;" onclick="exportExcel()">⬇ 导出 Excel</button>
+          <label class="btn btn-outline" style="background:#eff6ff;color:#1d4ed8;cursor:pointer;" title="导入之前导出的Excel文件">
+            ⬆ 导入 Excel
+            <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(event)">
+          </label>
+          <button class="btn btn-success" onclick="saveRecord()">💾 保存</button>
+        </div>
 
-      <!-- 搜索筛选 -->
-      <div class="search-bar">
-        <span style="font-size:13px;color:#64748b;font-weight:500;">筛选：</span>
-        <input type="text" id="searchText" placeholder="搜索样本/分类/条件..." oninput="applyFilter()" style="width:160px">
-        <div class="ms-wrap" id="mswrap-result">
-          <div class="ms-btn" id="msbtn-result" onclick="msToggle('result')">
-            <span class="ms-label" id="mslabel-result">全部结果</span>
-            <span class="ms-arrow">▼</span>
-          </div>
-          <div class="ms-panel" id="mspanel-result">
-            <div class="ms-panel-head">
-              <button onclick="msSelectAll('result')">全选</button>
-              <button onclick="msClearAll('result')">清空</button>
+        <!-- 工具栏第二行：筛选 -->
+        <div class="toolbar" id="filterToolbar">
+          <span style="font-size:13px;color:#64748b;font-weight:500;">筛选：</span>
+          <input type="text" id="searchText" placeholder="搜索样本/分类/条件..." oninput="applyFilter()" style="width:160px">
+          <div class="ms-wrap" id="mswrap-result">
+            <div class="ms-btn" id="msbtn-result" onclick="msToggle('result')">
+              <span class="ms-label" id="mslabel-result">全部结果</span>
+              <span class="ms-arrow">▼</span>
             </div>
-            <div id="mslist-result"></div>
-          </div>
-        </div>
-        <div class="ms-wrap" id="mswrap-cat">
-          <div class="ms-btn" id="msbtn-cat" onclick="msToggle('cat')">
-            <span class="ms-label" id="mslabel-cat">全部分类</span>
-            <span class="ms-arrow">▼</span>
-          </div>
-          <div class="ms-panel" id="mspanel-cat">
-            <div class="ms-panel-head">
-              <button onclick="msSelectAll('cat')">全选</button>
-              <button onclick="msClearAll('cat')">清空</button>
+            <div class="ms-panel" id="mspanel-result">
+              <div class="ms-panel-head">
+                <button onclick="msSelectAll('result')">全选</button>
+                <button onclick="msClearAll('result')">清空</button>
+              </div>
+              <div id="mslist-result"></div>
             </div>
-            <div id="mslist-cat"></div>
           </div>
-        </div>
-        <div class="ms-wrap" id="mswrap-plat">
-          <div class="ms-btn" id="msbtn-plat" onclick="msToggle('plat')">
-            <span class="ms-label" id="mslabel-plat">全部平台</span>
-            <span class="ms-arrow">▼</span>
-          </div>
-          <div class="ms-panel" id="mspanel-plat">
-            <div class="ms-panel-head">
-              <button onclick="msSelectAll('plat')">全选</button>
-              <button onclick="msClearAll('plat')">清空</button>
+          <div class="ms-wrap" id="mswrap-cat">
+            <div class="ms-btn" id="msbtn-cat" onclick="msToggle('cat')">
+              <span class="ms-label" id="mslabel-cat">全部分类</span>
+              <span class="ms-arrow">▼</span>
             </div>
-            <div id="mslist-plat"></div>
-          </div>
-        </div>
-        <div class="ms-wrap" id="mswrap-cond">
-          <div class="ms-btn" id="msbtn-cond" onclick="msToggle('cond')">
-            <span class="ms-label" id="mslabel-cond">全部条件</span>
-            <span class="ms-arrow">▼</span>
-          </div>
-          <div class="ms-panel" id="mspanel-cond">
-            <div class="ms-panel-head">
-              <button onclick="msSelectAll('cond')">全选</button>
-              <button onclick="msClearAll('cond')">清空</button>
+            <div class="ms-panel" id="mspanel-cat">
+              <div class="ms-panel-head">
+                <button onclick="msSelectAll('cat')">全选</button>
+                <button onclick="msClearAll('cat')">清空</button>
+              </div>
+              <div id="mslist-cat"></div>
             </div>
-            <div id="mslist-cond"></div>
           </div>
-        </div>
-        <div class="ms-wrap" id="mswrap-item">
-          <div class="ms-btn" id="msbtn-item" onclick="msToggle('item')">
-            <span class="ms-label" id="mslabel-item">全部项目</span>
-            <span class="ms-arrow">▼</span>
-          </div>
-          <div class="ms-panel" id="mspanel-item">
-            <div class="ms-panel-head">
-              <button onclick="msSelectAll('item')">全选</button>
-              <button onclick="msClearAll('item')">清空</button>
+          <div class="ms-wrap" id="mswrap-plat">
+            <div class="ms-btn" id="msbtn-plat" onclick="msToggle('plat')">
+              <span class="ms-label" id="mslabel-plat">全部平台</span>
+              <span class="ms-arrow">▼</span>
             </div>
-            <div id="mslist-item"></div>
-          </div>
-        </div>
-        <div class="ms-wrap" id="mswrap-round">
-          <div class="ms-btn" id="msbtn-round" onclick="msToggle('round')">
-            <span class="ms-label" id="mslabel-round">全部次数</span>
-            <span class="ms-arrow">▼</span>
-          </div>
-          <div class="ms-panel" id="mspanel-round">
-            <div class="ms-panel-head">
-              <button onclick="msSelectAll('round')">全选</button>
-              <button onclick="msClearAll('round')">清空</button>
+            <div class="ms-panel" id="mspanel-plat">
+              <div class="ms-panel-head">
+                <button onclick="msSelectAll('plat')">全选</button>
+                <button onclick="msClearAll('plat')">清空</button>
+              </div>
+              <div id="mslist-plat"></div>
             </div>
-            <div id="mslist-round"></div>
           </div>
+          <div class="ms-wrap" id="mswrap-cond">
+            <div class="ms-btn" id="msbtn-cond" onclick="msToggle('cond')">
+              <span class="ms-label" id="mslabel-cond">全部条件</span>
+              <span class="ms-arrow">▼</span>
+            </div>
+            <div class="ms-panel" id="mspanel-cond">
+              <div class="ms-panel-head">
+                <button onclick="msSelectAll('cond')">全选</button>
+                <button onclick="msClearAll('cond')">清空</button>
+              </div>
+              <div id="mslist-cond"></div>
+            </div>
+          </div>
+          <div class="ms-wrap" id="mswrap-item">
+            <div class="ms-btn" id="msbtn-item" onclick="msToggle('item')">
+              <span class="ms-label" id="mslabel-item">全部项目</span>
+              <span class="ms-arrow">▼</span>
+            </div>
+            <div class="ms-panel" id="mspanel-item">
+              <div class="ms-panel-head">
+                <button onclick="msSelectAll('item')">全选</button>
+                <button onclick="msClearAll('item')">清空</button>
+              </div>
+              <div id="mslist-item"></div>
+            </div>
+          </div>
+          <div class="ms-wrap" id="mswrap-round">
+            <div class="ms-btn" id="msbtn-round" onclick="msToggle('round')">
+              <span class="ms-label" id="mslabel-round">全部次数</span>
+              <span class="ms-arrow">▼</span>
+            </div>
+            <div class="ms-panel" id="mspanel-round">
+              <div class="ms-panel-head">
+                <button onclick="msSelectAll('round')">全选</button>
+                <button onclick="msClearAll('round')">清空</button>
+              </div>
+              <div id="mslist-round"></div>
+            </div>
+          </div>
+          <button class="btn" style="padding:5px 12px;background:#f1f5f9;font-size:12px;" onclick="clearFilter()">✕ 清除</button>
         </div>
-        <button class="btn" style="padding:5px 12px;background:#f1f5f9;font-size:12px;" onclick="clearFilter()">✕ 清除</button>
       </div>
 
       <!-- 实验表格 -->
@@ -646,8 +670,7 @@
 
     <!-- 统计视图 -->
     <div id="view-stats" style="display:none">
-      <div class="search-bar" style="margin-bottom:0;border-bottom:1px solid var(--border);">
-
+      <div class="toolbar" style="margin-bottom:16px;">
         <span style="font-size:13px;color:#64748b;font-weight:500;">筛选：</span>
         <!-- 分类 -->
         <div class="ms-wrap" id="mswrap-stat-cat">
@@ -691,7 +714,7 @@
             <div class="ms-list" id="mslist-stat-cond"></div>
           </div>
         </div>
-        <button class="btn" style="font-size:12px;padding:4px 10px;background:#f1f5f9;" onclick="statClearAllFilters()">✕ 清除</button>
+        <button class="btn" style="padding:5px 12px;background:#f1f5f9;font-size:12px;" onclick="statClearAllFilters()">✕ 清除</button>
       </div>
       <div class="stats-grid" id="statsGrid"></div>
       <div class="charts-grid">
@@ -1261,8 +1284,8 @@ function renderTable() {
       // 检查是否有条件备注
       const condNoteKey = `${plIdx}_${cdi}`;
       const hasCondNote = exp.conditionNotes && exp.conditionNotes[condNoteKey];
-      const noteIcon = hasCondNote ? `<span style="font-size:9px;margin-left:2px;opacity:.7;cursor:pointer;" onclick="event.stopPropagation();openConditionNoteModal(${plIdx},${cdi})" title="点击编辑条件备注">✎</span>` : '';
-      html += `<th style="font-size:12px;min-width:68px;background:#f8fafc;cursor:pointer;" onclick="openConditionNoteModal(${plIdx},${cdi})" title="点击编辑条件备注">总结${noteIcon}</th>`;
+      const noteIcon = hasCondNote ? `<span style="font-size:9px;margin-left:2px;opacity:.7;">✎</span>` : '';
+      html += `<th style="font-size:12px;min-width:68px;background:#f8fafc;cursor:pointer;" onclick="openConditionNoteModal(${plIdx},${cdi})" title="${hasCondNote ? '点击编辑条件备注' : '点击添加条件备注'}">总结${noteIcon}</th>`;
       condColIdx++;
     });
   });
@@ -1451,8 +1474,8 @@ function renderTable() {
               return (entry && entry.note) ? `${plItems[ii]}: ${entry.note}` : null;
             }).filter(n => n !== null);
             const hasSumNotes = sumNotes.length > 0;
-            const sumNoteIcon = hasSumNotes ? `<span style="font-size:9px;margin-left:2px;opacity:.7;" title="有${sumNotes.length}条备注">✎</span>` : '';
-            html += `<td class="summary-cell-col" onclick="openSummaryNoteModal(${ci},${ic},${pli},${cdi},${dataRound})" title="点击查看/编辑总结备注">
+            const sumNoteIcon = hasSumNotes ? `<span style="font-size:9px;margin-left:2px;opacity:.7;">✎</span>` : '';
+            html += `<td class="summary-cell-col" onclick="openSummaryNoteModal(${ci},${ic},${pli},${cdi},${dataRound})" title="${hasSumNotes ? '点击编辑总结备注' : '点击添加总结备注'}">
               <div class="sum-row ${sumClass}">${sumText}${sumNoteIcon}</div>
             </td>`;
           });
@@ -2396,7 +2419,7 @@ function makeRmTinyMCE(containerId, placeholder, pendingKey, fmtFn, toolbar, hei
   container.innerHTML = '<textarea></textarea>';
   
   // 定义默认工具栏（包含合并功能）
-  const defaultToolbar = 'undo redo | formatselect | bold italic underline strikethrough | bullist numlist | link image | removeformat';
+  const defaultToolbar = 'undo redo | styleselect formatselect | bold italic underline strikethrough | bullist numlist | link image | removeformat | alignleft aligncenter alignright alignjustify';
   
   // 初始化TinyMCE（5.x版本，兼容性好）
   tinymce.init({
@@ -2405,6 +2428,19 @@ function makeRmTinyMCE(containerId, placeholder, pendingKey, fmtFn, toolbar, hei
     menubar: false,
     plugins: 'link image lists',
     toolbar: toolbar || defaultToolbar,
+    // 自定义样式（用于 styleselect）
+    style_formats: [
+      { title: 'Heading 1', block: 'h1' },
+      { title: 'Heading 2', block: 'h2' },
+      { title: 'Heading 3', block: 'h3' },
+      { title: 'Paragraph', block: 'p' },
+      { title: 'Bold', inline: 'strong', exact: true },
+      { title: 'Italic', inline: 'em', exact: true },
+      { title: 'Underline', inline: 'span', styles: { 'text-decoration': 'underline' }, exact: true },
+      { title: 'Code', inline: 'code' },
+      { title: 'Preformatted', block: 'pre' },
+      { title: 'Blockquote', block: 'blockquote' }
+    ],
     // 添加格式选项（标题、合并等）
     formats: {
       alignleft: { selector: 'p,h1,h2,h3,h4,h5,h6,td,th,div,ul,ol,li,table,img', classes: 'left' },
@@ -2673,7 +2709,7 @@ function noteGetOrInitTinyMCE() {
     height: 400,
     menubar: false,
     plugins: 'link image lists',
-    toolbar: 'undo redo | bold italic underline | bullist numlist checkbox | separator date | link image | removeformat',
+    toolbar: 'undo redo | styleselect formatselect | bold italic underline strikethrough | bullist numlist checkbox | separator date | link image | removeformat | alignleft aligncenter alignright alignjustify',
     branding: false,
     skin_url: 'https://cdn.jsdelivr.net/npm/tinymce@5.10.9/skins/ui/oxide',
     content_css: 'https://cdn.jsdelivr.net/npm/tinymce@5.10.9/skins/content/default/content.min.css',
@@ -2854,13 +2890,17 @@ function openSummaryNoteModal(ci, ic, pli, cdi, round) {
   const cond = plat.conditions ? plat.conditions[cdi] : exp.conditions[cdi];
   document.getElementById('summaryNoteTitle').textContent = `📝 总结备注 - ${categoryName} #${ic+1} ${plat.name} | ${cond} 第${round+1}次`;
 
-  // 收集该轮次所有项目的备注
-  const notes = [];
+  // 读取独立的总结备注
+  const sumNoteKey = `${ci}_${ic}_${pli}_${cdi}_${round}`;
+  const existingNote = exp.summaryNotes ? exp.summaryNotes[sumNoteKey] || '' : '';
+
+  // 收集该轮次所有项目的备注（仅供参考）
+  const itemNotes = [];
   (plat.items || []).forEach((item, ii) => {
     const cell = getCell(ci, ic, pli, cdi, ii);
     const entry = cell[round];
     if (entry && entry.note) {
-      notes.push(`<div style="margin-bottom:8px;"><strong>${item}:</strong> ${entry.note}</div>`);
+      itemNotes.push(`<div style="margin-bottom:4px;color:#64748b;font-size:12px;"><strong>${item}:</strong> ${entry.note}</div>`);
     }
   });
 
@@ -2886,9 +2926,16 @@ function openSummaryNoteModal(ci, ic, pli, cdi, round) {
     }
   });
 
-  // 设置内容
-  if (notes.length > 0) {
-    _summaryNoteQuill.root.innerHTML = notes.join('');
+  // 设置内容：先显示项目备注参考，下面是独立备注
+  if (itemNotes.length > 0 || existingNote) {
+    let content = '';
+    if (itemNotes.length > 0) {
+      content += `<div style="margin-bottom:12px;padding-bottom:8px;border-bottom:1px dashed #e2e8f0;"><em>项目备注参考:</em><br/>${itemNotes.join('')}</div>`;
+    }
+    if (existingNote) {
+      content += existingNote;
+    }
+    _summaryNoteQuill.root.innerHTML = content;
   }
 
   document.getElementById('summaryNoteModal').classList.add('show');
@@ -2903,30 +2950,17 @@ function saveSummaryNote() {
   const html = _summaryNoteQuill.root.innerHTML;
   const text = _summaryNoteQuill.getText().trim();
 
-  // 将备注拆分到各个项目（简单处理：按行拆分，每行一个项目）
-  const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
-  const plat = platforms[pli];
+  // 保存独立的总结备注
+  if (!exp.summaryNotes) {
+    exp.summaryNotes = {};
+  }
 
-  if (text) {
-    // 如果有内容，尝试解析并分配到各个项目
-    const lines = _summaryNoteQuill.root.querySelectorAll('div, p, li');
-    lines.forEach((line, idx) => {
-      const lineText = line.textContent.trim();
-      if (!lineText) return;
+  const sumNoteKey = `${ci}_${ic}_${pli}_${cdi}_${round}`;
 
-      // 尝试匹配 "项目名: 备注" 格式
-      const match = lineText.match(/^([^:：]+)[:：]\s*(.+)$/);
-      if (match) {
-        const itemName = match[1].trim();
-        const noteText = match[2].trim();
-        const ii = plat.items.indexOf(itemName);
-        if (ii >= 0) {
-          const cell = getCell(ci, ic, pli, cdi, ii);
-          if (!cell[round]) cell[round] = { result: null, note: '' };
-          cell[round].note = noteText;
-        }
-      }
-    });
+  if (html && text) {
+    exp.summaryNotes[sumNoteKey] = html;
+  } else {
+    delete exp.summaryNotes[sumNoteKey];
   }
 
   closeModal('summaryNoteModal');
@@ -5359,10 +5393,10 @@ function exportExcel() {
   const S_PASS = { font: { bold: true, color: { rgb: '15803D' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'DCFCE7' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: BORDER };
   const S_FAIL = { font: { bold: true, color: { rgb: 'F97316' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'FFEDD5' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: BORDER };
   // 通过率总计行
-  const S_TOTAL_LABEL = { font: { bold: true, color: { rgb: '1E3A5F' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'BFDBFE' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: BORDER };
-  const S_TOTAL_PASS  = { font: { bold: true, color: { rgb: '15803D' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'BBF7D0' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: BORDER };
-  const S_TOTAL_FAIL  = { font: { bold: true, color: { rgb: 'DC2626' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'FED7AA' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: BORDER };
-  const S_TOTAL_EMPTY = { font: { bold: true, color: { rgb: '94A3B8' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: BORDER };
+  const S_TOTAL_LABEL = { font: { bold: true, color: { rgb: '1E3A5F' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'BFDBFE' } }, alignment: { horizontal: 'center', vertical: 'top' }, border: BORDER };
+  const S_TOTAL_PASS  = { font: { bold: true, color: { rgb: '15803D' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'BBF7D0' } }, alignment: { horizontal: 'center', vertical: 'top', wrapText: true }, border: BORDER };
+  const S_TOTAL_FAIL  = { font: { bold: true, color: { rgb: 'DC2626' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'FED7AA' } }, alignment: { horizontal: 'center', vertical: 'top', wrapText: true }, border: BORDER };
+  const S_TOTAL_EMPTY = { font: { bold: true, color: { rgb: '94A3B8' }, sz: 10 }, fill: { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } }, alignment: { horizontal: 'center', vertical: 'top', wrapText: true }, border: BORDER };
   const S_DATA_BASE = { font: { sz: 10 }, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: BORDER };
   const S_DATA_P = { font: { sz: 10, color: { rgb: '15803D' } }, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: BORDER };
   const S_DATA_F = { font: { sz: 10, color: { rgb: 'F97316' } }, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: BORDER };
@@ -5919,10 +5953,15 @@ function renderStats() {
   msSetOptions('stat-cat', categories.slice());
   const platNames = platforms.map(pl => pl.name);
   msSetOptions('stat-plat', platNames.slice());
-  const allCondsUniq = [];
-  const _condSeen = new Set();
-  platforms.forEach(pl => (pl.conditions || exp.conditions || []).forEach(c => { if (!_condSeen.has(c)) { _condSeen.add(c); allCondsUniq.push(c); } }));
-  msSetOptions('stat-cond', allCondsUniq.slice());
+  // 统计条件按平台分组
+  const groupedStatConds = [];
+  platforms.forEach(pl => {
+    const plConds = pl.conditions || exp.conditions || [];
+    plConds.forEach(c => {
+      groupedStatConds.push({ value: c, group: pl.name });
+    });
+  });
+  msRebuildGrouped('stat-cond', groupedStatConds);
 
   // 读取筛选
   const filterStatCats  = msGetSelected('stat-cat');
@@ -6080,6 +6119,7 @@ function drawChart(id, type, labels, datasets, extraOpts = {}) {
     }
   });
 }
+
 
 // ─────────────────────────────────────────────
 //  工具函数
