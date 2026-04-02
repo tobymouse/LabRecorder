@@ -1457,9 +1457,12 @@ function renderTable() {
             }
             // 检查是否有总结备注（roundNotes）
             const roundNoteKey = `${ci}_${ic}_${pli}_${cdi}_${dataRound}`;
-            const hasRoundNote = exp.roundNotes && exp.roundNotes[roundNoteKey];
+            const roundNote = exp.roundNotes ? exp.roundNotes[roundNoteKey] || '' : '';
+            const hasRoundNote = roundNote && roundNote.trim() !== '';
             const sumNoteIcon = hasRoundNote ? `<span style="font-size:9px;margin-left:2px;opacity:.7;">✎</span>` : '';
-            html += `<td class="summary-cell-col" onclick="openRoundNoteModal(${ci},${ic},${pli},${cdi},${dataRound})" title="${hasRoundNote ? '点击编辑总结备注' : '点击添加总结备注'}">
+            // 有备注时，title 显示完整备注内容
+            const titleText = hasRoundNote ? `点击编辑总结备注\n${roundNote}` : '点击添加总结备注';
+            html += `<td class="summary-cell-col" onclick="openRoundNoteModal(${ci},${ic},${pli},${cdi},${dataRound})" title="${escHtml(titleText)}">
               <div class="sum-row ${sumClass}">${sumText}${sumNoteIcon}</div>
             </td>`;
           });
