@@ -983,18 +983,6 @@
 </div>
 
 <!-- 总结备注弹窗 -->
-<div class="modal-overlay" id="summaryNoteModal">
-  <div class="modal" style="max-width:800px;width:95vw;max-height:90vh;overflow-y:auto;">
-    <span class="close-btn" onclick="closeModal('summaryNoteModal')">✕</span>
-    <h3 id="summaryNoteTitle" style="margin:0 0 12px;font-size:15px;font-weight:600;color:#1e293b;">📝 总结备注</h3>
-    <div id="summaryNoteQuillContainer"></div>
-    <div class="modal-footer">
-      <button class="btn" style="background:#f1f5f9;" onclick="closeModal('summaryNoteModal')">取消</button>
-      <button class="btn btn-success" onclick="saveSummaryNote()">保存</button>
-    </div>
-  </div>
-</div>
-
 <!-- 条件备注弹窗 -->
 <div class="modal-overlay" id="conditionNoteModal">
   <div class="modal" style="max-width:800px;width:95vw;max-height:90vh;overflow-y:auto;">
@@ -1285,7 +1273,7 @@ function renderTable() {
       const condNoteKey = `${plIdx}_${cdi}`;
       const hasCondNote = exp.conditionNotes && exp.conditionNotes[condNoteKey];
       const noteIcon = hasCondNote ? `<span style="font-size:9px;margin-left:2px;opacity:.7;">✎</span>` : '';
-      html += `<th style="font-size:12px;min-width:68px;background:#f8fafc;cursor:pointer;" onclick="openConditionNoteModal(${plIdx},${cdi})" title="${hasCondNote ? '点击编辑条件备注' : '点击添加条件备注'}">总结${noteIcon}</th>`;
+      html += `<th style="font-size:12px;min-width:68px;background:#f8fafc;">总结${noteIcon}</th>`;
       condColIdx++;
     });
   });
@@ -1467,15 +1455,11 @@ function renderTable() {
               else if (validResults.some(r => r === 'fail')) { sumClass = 'fail'; sumText = '✗ Fail'; }
               else { sumClass = 'empty'; sumText = '…'; }
             }
-            // 收集该轮次所有项目的备注
-            const sumNotes = visibleItemIdxs.map(ii => {
-              const cell = getCell(ci, ic, pli, cdi, ii);
-              const entry = cell[dataRound];
-              return (entry && entry.note) ? `${plItems[ii]}: ${entry.note}` : null;
-            }).filter(n => n !== null);
-            const hasSumNotes = sumNotes.length > 0;
-            const sumNoteIcon = hasSumNotes ? `<span style="font-size:9px;margin-left:2px;opacity:.7;">✎</span>` : '';
-            html += `<td class="summary-cell-col" onclick="openSummaryNoteModal(${ci},${ic},${pli},${cdi},${dataRound})" title="${hasSumNotes ? '点击编辑总结备注' : '点击添加总结备注'}">
+            // 检查是否有条件备注（条件备注就是总结备注）
+            const condNoteKey = `${pli}_${cdi}`;
+            const hasCondNote = exp.conditionNotes && exp.conditionNotes[condNoteKey];
+            const sumNoteIcon = hasCondNote ? `<span style="font-size:9px;margin-left:2px;opacity:.7;">✎</span>` : '';
+            html += `<td class="summary-cell-col" onclick="openConditionNoteModal(${pli},${cdi})" title="${hasCondNote ? '点击编辑条件备注' : '点击添加条件备注'}">
               <div class="sum-row ${sumClass}">${sumText}${sumNoteIcon}</div>
             </td>`;
           });
@@ -2878,95 +2862,7 @@ function saveSampleNote() {
 // ─────────────────────────────────────────────
 //  总结备注
 // ─────────────────────────────────────────────
-let _summaryNoteQuill = null;
-let _summaryNoteContext = null; // { ci, ic, pli, cdi, round }
 
-function openSummaryNoteModal(ci, ic, pli, cdi, round) {
-  _summaryNoteContext = { ci, ic, pli, cdi, round };
-
-  const categoryName = exp.categories[ci] || `分类${ci+1}`;
-  const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
-  const plat = platforms[pli];
-  const cond = plat.conditions ? plat.conditions[cdi] : exp.conditions[cdi];
-  document.getElementById('summaryNoteTitle').textContent = `📝 总结备注 - ${categoryName} #${ic+1} ${plat.name} | ${cond} 第${round+1}次`;
-
-  // 读取独立的总结备注
-  const sumNoteKey = `${ci}_${ic}_${pli}_${cdi}_${round}`;
-  const existingNote = exp.summaryNotes ? exp.summaryNotes[sumNoteKey] || '' : '';
-
-  // 收集该轮次所有项目的备注（仅供参考）
-  const itemNotes = [];
-  (plat.items || []).forEach((item, ii) => {
-    const cell = getCell(ci, ic, pli, cdi, ii);
-    const entry = cell[round];
-    if (entry && entry.note) {
-      itemNotes.push(`<div style="margin-bottom:4px;color:#64748b;font-size:12px;"><strong>${item}:</strong> ${entry.note}</div>`);
-    }
-  });
-
-  // 初始化 Quill 编辑器
-  const container = document.getElementById('summaryNoteQuillContainer');
-  container.innerHTML = '';
-
-  const defaultToolbar = [
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ 'header': [1, 2, 3, false] }],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    ['link', 'image'],
-    ['clean']
-  ];
-
-  _summaryNoteQuill = new Quill(container, {
-    theme: 'snow',
-    placeholder: '请输入总结备注...',
-    modules: {
-      toolbar: {
-        container: defaultToolbar
-      }
-    }
-  });
-
-  // 设置内容：先显示项目备注参考，下面是独立备注
-  if (itemNotes.length > 0 || existingNote) {
-    let content = '';
-    if (itemNotes.length > 0) {
-      content += `<div style="margin-bottom:12px;padding-bottom:8px;border-bottom:1px dashed #e2e8f0;"><em>项目备注参考:</em><br/>${itemNotes.join('')}</div>`;
-    }
-    if (existingNote) {
-      content += existingNote;
-    }
-    _summaryNoteQuill.root.innerHTML = content;
-  }
-
-  document.getElementById('summaryNoteModal').classList.add('show');
-}
-
-function saveSummaryNote() {
-  if (!_summaryNoteContext) return;
-  const { ci, ic, pli, cdi, round } = _summaryNoteContext;
-
-  if (!_summaryNoteQuill) return;
-
-  const html = _summaryNoteQuill.root.innerHTML;
-  const text = _summaryNoteQuill.getText().trim();
-
-  // 保存独立的总结备注
-  if (!exp.summaryNotes) {
-    exp.summaryNotes = {};
-  }
-
-  const sumNoteKey = `${ci}_${ic}_${pli}_${cdi}_${round}`;
-
-  if (html && text) {
-    exp.summaryNotes[sumNoteKey] = html;
-  } else {
-    delete exp.summaryNotes[sumNoteKey];
-  }
-
-  closeModal('summaryNoteModal');
-  saveStore();
-  renderTable();
-}
 
 // ─────────────────────────────────────────────
 //  条件备注
