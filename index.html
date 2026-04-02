@@ -1455,14 +1455,18 @@ function renderTable() {
               else if (validResults.some(r => r === 'fail')) { sumClass = 'fail'; sumText = '✗ Fail'; }
               else { sumClass = 'empty'; sumText = '…'; }
             }
-            // 检查是否有总结备注（roundNotes）
-            const roundNoteKey = `${ci}_${ic}_${pli}_${cdi}_${dataRound}`;
-            const roundNote = exp.roundNotes ? exp.roundNotes[roundNoteKey] || '' : '';
-            const hasRoundNote = roundNote && roundNote.trim() !== '';
-            const sumNoteIcon = hasRoundNote ? `<span style="font-size:9px;margin-left:2px;opacity:.7;">✎</span>` : `<span style="font-size:9px;margin-left:2px;opacity:.4;">✎</span>`;
+            // 检查是否有总结备注（conditionNotes）
+            const condNoteKey = `${ci}_${ic}_${pli}_${cdi}_${dataRound}`;
+            const condNote = exp.conditionNotes ? exp.conditionNotes[condNoteKey] || '' : '';
+            const hasCondNote = condNote && condNote.trim() !== '';
+            // 图标颜色：根据 Pass/Fail 背景色调整，用浅灰色 #94a3b8（与操作列一致）
+            const iconColor = sumClass === 'pass' ? '#065f46' : (sumClass === 'fail' ? '#9a3412' : '#94a3b8');
+            const sumNoteIcon = hasCondNote
+              ? `<span style="font-size:9px;margin-left:2px;opacity:.7;color:${iconColor};">✎</span>`
+              : '';
             // 有备注时，title 显示完整备注内容
-            const titleText = hasRoundNote ? `点击编辑总结备注\n${roundNote}` : '点击添加总结备注';
-            html += `<td class="summary-cell-col" onclick="openRoundNoteModal(${ci},${ic},${pli},${cdi},${dataRound})" title="${escHtml(titleText)}">
+            const titleText = hasCondNote ? `点击编辑总结备注\n${condNote}` : '点击添加总结备注';
+            html += `<td class="summary-cell-col" onclick="openCondNoteModal(${ci},${ic},${pli},${cdi},${dataRound})" title="${escHtml(titleText)}">
               <div class="sum-row ${sumClass}">${sumText}${sumNoteIcon}</div>
             </td>`;
           });
@@ -1471,20 +1475,14 @@ function renderTable() {
         // 操作列
         if (noFilter) {
           const noteKey = `${ci}_${ic}_round_${dataRound}`;
-          const hasRoundNote = visiblePlatInfos.some(({ pli, plItems, visibleCondIdxs }) => {
-            return visibleCondIdxs.some(cdi => {
-              return plItems.some((_, ii) => {
-                const cell = getCell(ci, ic, pli, cdi, ii);
-                const entry = cell[dataRound];
-                return entry && entry.note && entry.note.trim() !== '';
-              });
-            });
-          });
-          const btnText = `操作${hasRoundNote ? ' ✎' : ''}`;
-          const btnTitle = hasRoundNote ? '点击打开操作菜单' : '点击打开操作菜单';
+          const roundNote = exp.roundNotes ? exp.roundNotes[noteKey] || '' : '';
+          const hasRoundNote = roundNote && roundNote.trim() !== '';
+
+          const btnText = hasRoundNote ? '操作 ✎' : '操作';
+          const btnTitle = hasRoundNote ? `点击打开操作菜单\n次备注: ${roundNote}` : '点击打开操作菜单';
 
           html += `<td style="vertical-align:middle;text-align:center;padding:2px 3px;">
-            <span class="add-round-btn" onclick="openAddRoundDropdown(event,${ci},${ic},${dataRound})" title="${btnTitle}">${btnText}</span>
+            <span class="add-round-btn" onclick="openAddRoundDropdown(event,${ci},${ic},${dataRound})" title="${escHtml(btnTitle)}">${btnText}</span>
           </td>`;
           html += `<td style="vertical-align:middle;text-align:center;padding:2px 3px;">
             <span class="del-round-btn" onclick="deleteSampleRound(${ci},${ic},${dataRound})" title="删除第${dataRound+1}次记录">删除</span>
@@ -1872,19 +1870,10 @@ function openAddRoundDropdown(e, ci, ic, dataRound) {
   e.stopPropagation();
   _addRoundCtx = { ci, ic, dataRound };
 
-  // 检查该次是否有备注
-  const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
-  const hasNote = platforms.some((_, pli) => {
-    const plItems = platforms[pli].items || [];
-    const plConds = platforms[pli].conditions || exp.conditions || [];
-    return plConds.some((_, cdi) => {
-      return plItems.some((_, ii) => {
-        const cell = getCell(ci, ic, pli, cdi, ii);
-        const entry = cell[dataRound];
-        return entry && entry.note && entry.note.trim() !== '';
-      });
-    });
-  });
+  // 检查该次是否有次备注
+  const noteKey = `${ci}_${ic}_round_${dataRound}`;
+  const roundNote = exp.roundNotes ? exp.roundNotes[noteKey] || '' : '';
+  const hasNote = roundNote && roundNote.trim() !== '';
 
   // 更新备注按钮样式
   const noteBtn = document.getElementById('ardNoteBtn');
@@ -1989,10 +1978,10 @@ function openRoundNoteModalFromDropdown() {
   if (!_addRoundCtx) return;
   const { ci, ic, dataRound } = _addRoundCtx;
   closeAddRoundDropdown();
-  openRoundNoteModal(ci, ic, dataRound);
+  openRoundNoteModal_simple(ci, ic, dataRound);
 }
 
-function openRoundNoteModal(ci, ic, round) {
+function openRoundNoteModal_simple(ci, ic, round) {
   _roundNoteCi = ci;
   _roundNoteIc = ic;
   _roundNoteRound = round;
@@ -2000,24 +1989,10 @@ function openRoundNoteModal(ci, ic, round) {
   const categoryName = exp.categories[ci] || `分类${ci+1}`;
   document.getElementById('roundNoteTitle').textContent = `📝 次备注 - ${categoryName} #${ic+1} 第${round+1}次`;
 
-  // 收集该次的所有备注
-  const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
-  const notes = [];
-  platforms.forEach((pl, pli) => {
-    const plItems = pl.items || [];
-    const plConds = pl.conditions || exp.conditions || [];
-    plConds.forEach((cond, cdi) => {
-      plItems.forEach((item, ii) => {
-        const cell = getCell(ci, ic, pli, cdi, ii);
-        const entry = cell[round];
-        if (entry && entry.note && entry.note.trim() !== '') {
-          notes.push(`【${pl.name} | ${cond} | ${item}】\n${entry.note}`);
-        }
-      });
-    });
-  });
+  const noteKey = `${ci}_${ic}_round_${round}`;
+  const roundNote = exp.roundNotes ? exp.roundNotes[noteKey] || '' : '';
 
-  document.getElementById('roundNoteInput').value = notes.join('\n\n') || '';
+  document.getElementById('roundNoteInput').value = roundNote;
   document.getElementById('roundNoteModal').classList.add('show');
 }
 
@@ -2025,33 +2000,17 @@ function saveRoundNote() {
   if (_roundNoteCi === null || _roundNoteIc === null || _roundNoteRound === null) return;
 
   const note = document.getElementById('roundNoteInput').value.trim();
-  const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
+  const noteKey = `${_roundNoteCi}_${_roundNoteIc}_round_${_roundNoteRound}`;
 
-  // 将备注应用到该次的所有单元格
-  platforms.forEach((_, pli) => {
-    const plItems = platforms[pli].items || [];
-    const plConds = platforms[pli].conditions || exp.conditions || [];
-    plConds.forEach((_, cdi) => {
-      plItems.forEach((_, ii) => {
-        const cell = getCell(_roundNoteCi, _roundNoteIc, pli, cdi, ii);
-        const entry = cell[_roundNoteRound];
-        if (entry !== undefined && entry !== null) {
-          if (note) {
-            // 如果单元格已有备注，追加新备注
-            if (entry.note && entry.note.trim() !== '') {
-              entry.note = entry.note + '\n' + note;
-            } else {
-              entry.note = note;
-            }
-          } else {
-            // 清空备注
-            entry.note = '';
-          }
-        }
-        setCell(_roundNoteCi, _roundNoteIc, pli, cdi, ii, cell);
-      });
-    });
-  });
+  if (!exp.roundNotes) {
+    exp.roundNotes = {};
+  }
+
+  if (note) {
+    exp.roundNotes[noteKey] = note;
+  } else {
+    delete exp.roundNotes[noteKey];
+  }
 
   closeModal('roundNoteModal');
   saveStore();
@@ -2406,7 +2365,7 @@ function makeRmTinyMCE(containerId, placeholder, pendingKey, fmtFn, toolbar, hei
   container.innerHTML = '<textarea></textarea>';
   
   // 定义默认工具栏（包含合并功能）
-  const defaultToolbar = 'undo redo | styleselect formatselect | bold italic underline strikethrough | bullist numlist | link image | removeformat | alignleft aligncenter alignright alignjustify';
+  const defaultToolbar = 'undo redo | bold italic underline strikethrough | bullist numlist | link image | removeformat';
   
   // 初始化TinyMCE（5.x版本，兼容性好）
   tinymce.init({
@@ -2415,19 +2374,6 @@ function makeRmTinyMCE(containerId, placeholder, pendingKey, fmtFn, toolbar, hei
     menubar: false,
     plugins: 'link image lists',
     toolbar: toolbar || defaultToolbar,
-    // 自定义样式（用于 styleselect）
-    style_formats: [
-      { title: 'Heading 1', block: 'h1' },
-      { title: 'Heading 2', block: 'h2' },
-      { title: 'Heading 3', block: 'h3' },
-      { title: 'Paragraph', block: 'p' },
-      { title: 'Bold', inline: 'strong', exact: true },
-      { title: 'Italic', inline: 'em', exact: true },
-      { title: 'Underline', inline: 'span', styles: { 'text-decoration': 'underline' }, exact: true },
-      { title: 'Code', inline: 'code' },
-      { title: 'Preformatted', block: 'pre' },
-      { title: 'Blockquote', block: 'blockquote' }
-    ],
     // 添加格式选项（标题、合并等）
     formats: {
       alignleft: { selector: 'p,h1,h2,h3,h4,h5,h6,td,th,div,ul,ol,li,table,img', classes: 'left' },
@@ -2696,7 +2642,7 @@ function noteGetOrInitTinyMCE() {
     height: 400,
     menubar: false,
     plugins: 'link image lists',
-    toolbar: 'undo redo | styleselect formatselect | bold italic underline strikethrough | bullist numlist checkbox | separator date | link image | removeformat | alignleft aligncenter alignright alignjustify',
+    toolbar: 'undo redo | bold italic underline strikethrough | bullist numlist checkbox | separator date | link image | removeformat',
     branding: false,
     skin_url: 'https://cdn.jsdelivr.net/npm/tinymce@5.10.9/skins/ui/oxide',
     content_css: 'https://cdn.jsdelivr.net/npm/tinymce@5.10.9/skins/content/default/content.min.css',
@@ -2868,11 +2814,11 @@ function saveSampleNote() {
 
 
 // ─────────────────────────────────────────────
-//  总结备注（次备注）roundNotes
-let _roundNoteContext = null; // { ci, ic, pli, cdi, round }
+//  总结备注 conditionNotes
+let _condNoteContext = null; // { ci, ic, pli, cdi, round }
 
-function openRoundNoteModal(ci, ic, pli, cdi, round) {
-  _roundNoteContext = { ci, ic, pli, cdi, round };
+function openCondNoteModal(ci, ic, pli, cdi, round) {
+  _condNoteContext = { ci, ic, pli, cdi, round };
 
   const categoryName = exp.categories[ci] || `分类${ci+1}`;
   const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
@@ -2880,34 +2826,52 @@ function openRoundNoteModal(ci, ic, pli, cdi, round) {
   const cond = plat.conditions ? plat.conditions[cdi] : exp.conditions[cdi];
 
   // 设置标题
-  const noteKey = `${ci}_${ic}_round_${round}`;
-  const hasNote = exp.roundNotes && exp.roundNotes[noteKey];
+  const condNoteKey = `${ci}_${ic}_${pli}_${cdi}_${round}`;
+  console.log('[openCondNoteModal] condNoteKey =', condNoteKey);
+  console.log('[openCondNoteModal] exp.conditionNotes =', exp.conditionNotes);
+  const existingNote = exp.conditionNotes ? exp.conditionNotes[condNoteKey] || '' : '';
+  console.log('[openCondNoteModal] existingNote =', existingNote);
+
   document.getElementById('roundNoteTitle').textContent = `📝 总结备注 - ${categoryName} #${ic+1} ${plat.name} | ${cond} 第${round+1}次`;
 
   // 设置内容
-  const roundNoteKey = `${ci}_${ic}_${pli}_${cdi}_${round}`;
-  const existingNote = exp.roundNotes ? exp.roundNotes[roundNoteKey] || '' : '';
   document.getElementById('roundNoteInput').value = existingNote;
 
   document.getElementById('roundNoteModal').classList.add('show');
 }
 
 function saveRoundNote() {
-  if (!_roundNoteContext) return;
-  const { ci, ic, pli, cdi, round } = _roundNoteContext;
-
   const note = document.getElementById('roundNoteInput').value.trim();
 
-  if (!exp.roundNotes) {
-    exp.roundNotes = {};
-  }
+  // 判断是次备注还是总结备注
+  if (_roundNoteCi !== null && _roundNoteIc !== null && _roundNoteRound !== null) {
+    // 次备注（操作列）
+    const noteKey = `${_roundNoteCi}_${_roundNoteIc}_round_${_roundNoteRound}`;
 
-  const roundNoteKey = `${ci}_${ic}_${pli}_${cdi}_${round}`;
+    if (!exp.roundNotes) {
+      exp.roundNotes = {};
+    }
 
-  if (note) {
-    exp.roundNotes[roundNoteKey] = note;
-  } else {
-    delete exp.roundNotes[roundNoteKey];
+    if (note) {
+      exp.roundNotes[noteKey] = note;
+    } else {
+      delete exp.roundNotes[noteKey];
+    }
+  } else if (_condNoteContext) {
+    // 总结备注（总结列）
+    const { ci, ic, pli, cdi, round } = _condNoteContext;
+
+    if (!exp.conditionNotes) {
+      exp.conditionNotes = {};
+    }
+
+    const condNoteKey = `${ci}_${ic}_${pli}_${cdi}_${round}`;
+
+    if (note) {
+      exp.conditionNotes[condNoteKey] = note;
+    } else {
+      delete exp.conditionNotes[condNoteKey];
+    }
   }
 
   closeModal('roundNoteModal');
@@ -4946,6 +4910,18 @@ function loadRecord(id) {
   if (!exp.hiddenConds) exp.hiddenConds = [];
   if (!exp.hiddenItems) exp.hiddenItems = [];
   if (!exp.hiddenPlats) exp.hiddenPlats = [];
+  // 迁移旧 roundNotes（总结备注）到 conditionNotes
+  if (exp.roundNotes && Object.keys(exp.roundNotes).length > 0) {
+    if (!exp.conditionNotes) {
+      exp.conditionNotes = {};
+    }
+    // 旧 roundNotes 的 key 格式：ci_ic_pli_cdi_round（这是总结备注格式）
+    // 直接迁移到 conditionNotes
+    Object.entries(exp.roundNotes).forEach(([key, value]) => {
+      exp.conditionNotes[key] = value;
+    });
+    delete exp.roundNotes;
+  }
   // 兼容旧数据：若无 platforms，则从旧 items 迁移，将 data key 从 "ci_ic_cdi_ii" 迁移为 "ci_ic_0_cdi_ii"
   if (!exp.platforms || exp.platforms.length === 0) {
     const legacyItems = exp.items || ['项目1'];
