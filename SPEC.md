@@ -30,27 +30,42 @@
 
 ```json
 {
-  "records": [ <LabRecord>, ... ]
+  "records": [ <LabRecord>, ... ],
+  "categories": [
+    { "id": "cat-001", "name": "示例批次 A", "hidden": false }
+  ]
 }
 ```
 
-### 2.2 LabRecord 对象
+**说明：**
+- `records`：存储所有实验记录的数组
+- `categories`：分类（lot）元数据，每个分类有唯一 ID 和名称
+
+### 2.2 LabRecord 对象（完整数据结构）
 
 ```json
 {
   "id": "uuid-string",
   "name": "BT SoC EVT Validation",
-  "note": "备注",
-  "createdAt": "ISO8601",
+  "note": "实验备注",
+  "createdAt": "2026-04-02T12:00:00.000Z",
   "targetPassRate": 80,
   "alarmPassRate": 60,
   "categories": ["EVT-A", "EVT-B", "DVT-01"],
   "sampleCounts": [10, 10, 20],
+  "conditions": ["Normal 25°C", "High Temp 85°C", "Low Temp -40°C"],
   "platforms": [
     {
       "name": "Socket/COB",
       "items": ["Current (sleep)", "Current (TX)", "RSSI", "Throughput"],
       "conditions": ["Normal 25°C", "High Temp 85°C", "Low Temp -40°C"],
+      "hiddenConds": [],
+      "hiddenItems": []
+    },
+    {
+      "name": "PCB Test",
+      "items": ["Voltage", "Current", "Frequency"],
+      "conditions": ["Normal 25°C"],
       "hiddenConds": [],
       "hiddenItems": []
     }
@@ -64,14 +79,134 @@
     "0_1": "样本批次异常，需重点关注",
     "2_5": "测试夹具接触不良"
   },
+  "roundNotes": {
+    "0_0_round_0": "第一次测试，环境稳定",
+    "0_1_round_1": "重复测试验证"
+  },
+  "conditionNotes": {
+    "0_0": "常温条件下测试注意事项"
+  },
   "data": {
     "0_0_0_0_0": [{ "result": "P", "note": "" }],
-    "0_0_0_0_1": [{ "result": "F", "note": "电流偏高 12mA vs spec 10mA" }]
+    "0_0_0_0_1": [{ "result": "F", "note": "电流偏高 12mA vs spec 10mA" }],
+    "0_1_0_0_0": [{ "result": "P", "note": "" }, { "result": "P", "note": "" }],
+    "0_1_0_0_1": [{ "result": "F", "note": "失败" }, { "result": "P", "note": "重测通过" }]
   }
 }
 ```
 
-### 2.3 Cell Key 格式
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 实验唯一标识（UUID） |
+| `name` | string | 实验名称 |
+| `note` | string | 实验备注（富文本） |
+| `createdAt` | ISO8601 | 创建时间 |
+| `targetPassRate` | number | 目标通过率（默认 80%） |
+| `alarmPassRate` | number | 报警通过率（默认 60%） |
+| `categories` | string[] | 分类名称列表（如 ["EVT-A", "EVT-B"]） |
+| `sampleCounts` | number[] | 每个分类的样本数（如 [10, 20] 表示分类0有10个样本，分类1有20个样本） |
+| `conditions` | string[] | 全局条件列表（旧版兼容，新版建议在 `platforms[].conditions` 中定义） |
+| `platforms` | object[] | 平台数组，每个平台可独立定义条件和项目 |
+| `platforms[].name` | string | 平台名称 |
+| `platforms[].items` | string[] | 项目名称列表 |
+| `platforms[].conditions` | string[] | 平台专属条件列表 |
+| `platforms[].hiddenConds` | number[] | 隐藏的条件索引（0-based） |
+| `platforms[].hiddenItems` | number[] | 隐藏的项目索引（0-based） |
+| `hiddenPlats` | number[] | 隐藏的平台索引（0-based） |
+| `hiddenCats` | number[] | 隐藏的分类索引（0-based） |
+| `redmineIssues` | object[] | 关联的 Redmine Issue 列表 |
+| `redmineIssues[].id` | number | Redmine Issue ID |
+| `redmineIssues[].url` | string | Redmine Issue URL |
+| `sampleNotes` | object | 样本备注，key 格式为 `"ci_ic"` |
+| `roundNotes` | object | 次备注，key 格式为 `"ci_ic_round_N"` |
+| `conditionNotes` | object | 条件备注，key 格式为 `"pli_cdi"` |
+| `data` | object | 测试结果数据，key 格式为 `"ci_ic_pli_cdi_ii"` |
+
+### 2.3 data 数组结构（测试结果）
+
+`data` 对象存储所有测试结果，每个 key 对应一个位置的所有测试轮次数据。
+
+**Key 格式：**
+```
+ci_ic_pli_cdi_ii
+```
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `ci` | 分类索引 | 0, 1, 2... |
+| `ic` | 样本索引 | 0, 1, 2...（对应 `sampleCounts[ci]`） |
+| `pli` | 平台索引 | 0, 1, 2...（对应 `platforms[]`） |
+| `cdi` | 平台内条件索引 | 0, 1, 2...（对应 `platforms[pli].conditions[]`） |
+| `ii` | 平台内项目索引 | 0, 1, 2...（对应 `platforms[pli].items[]`） |
+
+**数据结构示例：**
+
+```json
+{
+  "data": {
+    "0_0_0_0_0": [
+      { "result": "P", "note": "" },
+      { "result": "P", "note": "" }
+    ],
+    "0_0_0_0_1": [
+      { "result": "F", "note": "电流偏高" },
+      { "result": "P", "note": "重测通过" }
+    ],
+    "0_1_0_0_0": [
+      { "result": "P", "note": "" },
+      { "result": "F", "note": "偶发失败" },
+      { "result": "P", "note": "" }
+    ]
+  }
+}
+```
+
+**说明：**
+- 每个 key 对应一个数组，数组中的每个元素代表一次测试的结果
+- 数组索引 `0, 1, 2...` 对应第1次、第2次、第3次测试
+- `result` 值为 `"P"`（Pass）或 `"F"`（Fail）
+- `note` 存储该次测试的备注
+
+### 2.4 样本备注结构（sampleNotes）
+
+```json
+{
+  "sampleNotes": {
+    "0_1": "样本批次异常，需重点关注",
+    "2_5": "测试夹具接触不良"
+  }
+}
+```
+
+**Key 格式：** `"ci_ic"`（分类索引_样本索引）
+
+### 2.5 次备注结构（roundNotes）
+
+```json
+{
+  "roundNotes": {
+    "0_0_round_0": "第一次测试，环境稳定",
+    "0_1_round_1": "重复测试验证"
+  }
+}
+```
+
+**Key 格式：** `"ci_ic_round_N"`（分类索引_样本索引_round_轮次索引）
+
+### 2.6 条件备注结构（conditionNotes）
+
+```json
+{
+  "conditionNotes": {
+    "0_0": "常温条件下测试注意事项",
+    "0_1": "高温条件下需预热"
+  }
+}
+```
+
+**Key 格式：** `"pli_cdi"`（平台索引_条件索引）
 
 ```
 ci_ic_pli_cdi_ii
@@ -85,7 +220,90 @@ ci_ic_pli_cdi_ii
 | `cdi` | 平台内条件索引，0-based |
 | `ii` | 平台内项目索引，0-based |
 
-### 2.4 旧数据兼容迁移
+### 2.4 完整 data.json 示例
+
+```json
+{
+  "records": [
+    {
+      "id": "example-001",
+      "name": "BT SoC EVT Validation",
+      "note": "<p>EVT阶段验证测试</p>",
+      "createdAt": "2026-04-02T12:00:00.000Z",
+      "targetPassRate": 80,
+      "alarmPassRate": 60,
+      "categories": ["EVT-A", "EVT-B"],
+      "sampleCounts": [3, 2],
+      "conditions": ["Normal 25°C", "High Temp 85°C"],
+      "platforms": [
+        {
+          "name": "Socket/COB",
+          "items": ["启动时间", "功耗", "稳定性"],
+          "conditions": ["Normal 25°C", "High Temp 85°C"],
+          "hiddenConds": [],
+          "hiddenItems": []
+        },
+        {
+          "name": "PCB Test",
+          "items": ["电压", "电流"],
+          "conditions": ["Normal 25°C"],
+          "hiddenConds": [],
+          "hiddenItems": []
+        }
+      ],
+      "hiddenPlats": [],
+      "hiddenCats": [],
+      "redmineIssues": [
+        { "id": 1234, "url": "https://redmine.example.com/issues/1234" }
+      ],
+      "sampleNotes": {
+        "0_0": "正常样本",
+        "0_1": "样本批次异常，需重点关注",
+        "1_0": "PCB批次A"
+      },
+      "roundNotes": {
+        "0_0_round_0": "第一次测试，环境稳定",
+        "0_1_round_0": "初始测试"
+      },
+      "conditionNotes": {
+        "0_0": "常温条件下测试注意事项"
+      },
+      "data": {
+        "0_0_0_0_0": [{ "result": "P", "note": "" }],
+        "0_0_0_0_1": [{ "result": "P", "note": "" }],
+        "0_0_0_0_2": [{ "result": "P", "note": "" }],
+        "0_0_0_1_0": [{ "result": "F", "note": "高温下功耗超标" }],
+        "0_0_0_1_1": [{ "result": "P", "note": "" }],
+        "0_0_0_1_2": [{ "result": "P", "note": "" }],
+        "0_0_1_0_0": [{ "result": "P", "note": "" }],
+        "0_0_1_0_1": [{ "result": "P", "note": "" }],
+        "0_1_0_0_0": [{ "result": "P", "note": "" }, { "result": "P", "note": "重测" }],
+        "0_1_0_0_1": [{ "result": "F", "note": "异常" }, { "result": "P", "note": "修复后通过" }],
+        "0_1_0_0_2": [{ "result": "P", "note": "" }, { "result": "P", "note": "" }],
+        "1_0_0_0_0": [{ "result": "P", "note": "" }],
+        "1_0_0_0_1": [{ "result": "P", "note": "" }],
+        "1_1_0_0_0": [{ "result": "P", "note": "" }],
+        "1_1_0_0_1": [{ "result": "P", "note": "" }]
+      }
+    }
+  ],
+  "categories": [
+    { "id": "cat-001", "name": "EVT-A", "hidden": false },
+    { "id": "cat-002", "name": "EVT-B", "hidden": false }
+  ]
+}
+```
+
+**示例说明：**
+- 2个分类：EVT-A（3个样本）、EVT-B（2个样本）
+- 2个平台：Socket/COB（2个条件，3个项目）、PCB Test（1个条件，2个项目）
+- `0_0_0_0_0`：分类0，样本0，平台0，条件0，项目0 → 结果为第1次测试 Pass
+- `0_1_0_0_0`：分类0，样本1，平台0，条件0，项目0 → 结果数组有2个元素，表示测试了2次（Pass, Pass）
+- `sampleNotes`：记录每个样本的备注
+- `roundNotes`：记录每次测试的备注
+- `conditionNotes`：记录每个条件的备注
+
+### 2.5 旧数据兼容迁移
 
 加载时自动检测并迁移（`loadRecord` 内执行）：
 

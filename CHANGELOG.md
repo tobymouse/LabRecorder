@@ -151,4 +151,20 @@
 
 ---
 
-*最后更新：2026-04-02（v1.3-alpha）*
+---
+
+## [v1.3.1-alpha] — 2026-04-03
+
+### 📝 文档
+
+- **SPEC.md 数据结构完整描述**：添加详细的 data.json 数据结构说明
+  - 顶层结构（records、categories）
+  - LabRecord 对象所有字段表格说明
+  - data 数组 Key 格式详解（`ci_ic_pli_cdi_ii`）
+  - 备注字段结构（sampleNotes、roundNotes、conditionNotes）
+  - 完整的 data.json 示例（含 2 个分类、2 个平台、多轮次测试）
+  - 旧数据兼容迁移说明
+
+---
+
+*最后更新：2026-04-03（v1.3.1-alpha）*

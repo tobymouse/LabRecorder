@@ -5716,17 +5716,15 @@ function exportExcel() {
       dataRow++;
     }
 
-    // 合并分类列（跨样本数行）
+    // 合并分类列（跨样本数行 + 通过率行）
     if (sampleCount > 1) {
-      ws['!merges'].push({ s: { r: catStart, c: 0 }, e: { r: catStart + sampleCount - 1, c: 0 } });
+      ws['!merges'].push({ s: { r: catStart, c: 0 }, e: { r: catStart + sampleCount, c: 0 } });
     }
 
     // ── 通过率总计行（每个分类底部）────────────────────
     // 单行显示，每个项目和总结列都显示各轮次的通过率（换行分隔）
-    setCell(ws, dataRow, 0, '通过率', S_TOTAL_LABEL);
-    // 合并 ic 列
-    setCell(ws, dataRow, 1, '', S_TOTAL_LABEL);
-    ws['!merges'].push({ s: { r: dataRow, c: 0 }, e: { r: dataRow, c: 1 } });
+    // 分类列不设置（空单元格）
+    setCell(ws, dataRow, 1, '通过率', S_TOTAL_LABEL);
 
     // 获取最大轮次数
     const maxRounds = _getMaxRounds();
