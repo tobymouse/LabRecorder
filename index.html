@@ -1878,7 +1878,12 @@ function cdDelete() {
   const { ci, ic, pli, cdi, ii, round } = cdCtx;
   if (round === undefined) { closeCellDropdown(); return; }
   const arr = getCell(ci, ic, pli, cdi, ii);
-  arr.splice(round, 1);
+  console.log(`[cdDelete] 删除前 ci=${ci} ic=${ic} pli=${pli} cdi=${cdi} ii=${ii} round=${round} arr=`, arr.map(r=>r?.result));
+  // 将指定位置设为 null，而不是删除元素，避免后续数据上移
+  if (round < arr.length) {
+    arr[round] = { result: null, note: '' };
+  }
+  console.log(`[cdDelete] 删除后 arr=`, arr.map(r=>r?.result));
   setCell(ci, ic, pli, cdi, ii, arr);
   closeCellDropdown();
   renderTable();
@@ -4200,10 +4205,12 @@ function confirmResult() {
 function removeResult(ci, ic, pli, cdi, ii, ri) {
   event.stopPropagation();
   const arr = getCell(ci, ic, pli, cdi, ii);
+  console.log(`[removeResult] 删除前 ci=${ci} ic=${ic} pli=${pli} cdi=${cdi} ii=${ii} ri=${ri} arr=`, arr.map(r=>r?.result));
   // 将指定位置设为 null，而不是删除元素，避免后续数据上移
   if (ri < arr.length) {
     arr[ri] = { result: null, note: '' };
   }
+  console.log(`[removeResult] 删除后 arr=`, arr.map(r=>r?.result));
   setCell(ci, ic, pli, cdi, ii, arr);
   renderTable();
 }
