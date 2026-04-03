@@ -1059,6 +1059,9 @@ let state = {
 // 跟踪当前实验室（用于换实验室提示）
 let _currentLab = null;
 
+// 跟踪是否有未保存的修改（用于刷新/换实验提示）
+let _hasUnsavedChanges = false;
+
 // 当前实验数据结构
 let exp = {
   id: null,
@@ -1078,6 +1081,7 @@ let exp = {
   // key格式: "ci_ic_pli_cdi_ii"（cdi 为平台内条件索引）
   data: {},
   sampleNotes: {},                    // 样本备注：{ 'ci_ic': '备注内容' }
+  roundNotes: {},                    // 次备注：{ 'ci_ic_round_0': '备注内容' }
   conditionNotes: {},                 // 条件备注：{ 'pli_cdi': '备注内容' }
 };
 
@@ -1229,6 +1233,20 @@ function renderTable() {
     const visibleItemIdxs = plItems.map((_, ii) => ii).filter(ii =>
       !hiddenItems.has(ii) && (filterItems.size === 0 || filterItems.has(plItems[ii]))
     );
+    if (pli === 0) {
+      console.log(`[renderTable] pli=${pli} plConds=`, plConds);
+      console.log(`[renderTable] hiddenConds=`, hiddenConds);
+      console.log(`[renderTable] filterConds=`, filterConds);
+      console.log(`[renderTable] visibleCondIdxs=`, visibleCondIdxs);
+      // 调试：看看每个条件被过滤的原因
+      plConds.forEach((condName, i) => {
+        if (!visibleCondIdxs.includes(i)) {
+          const hidden = hiddenConds.has(i);
+          const filtered = filterConds.size > 0 && !filterConds.has(condName);
+          console.log(`[renderTable] cdi=${i} (${condName}) 被过滤: hidden=${hidden}, filtered=${filtered}`);
+        }
+      });
+    }
     // 是否空平台（无条件或无项目）
     const isEmpty = visibleCondIdxs.length === 0 || visibleItemIdxs.length === 0;
     return { pli, pl, plItems, plConds, visibleCondIdxs, visibleItemIdxs, isEmpty };
@@ -1278,7 +1296,7 @@ function renderTable() {
     });
   });
   if (noFilter) {
-    html += `<th style="min-width:52px;background:#eff6ff;font-size:11px;color:#3b82f6;">添加次数</th>`;
+    html += `<th style="min-width:52px;background:#eff6ff;font-size:11px;color:#3b82f6;">次操作</th>`;
     html += `<th style="min-width:52px;background:#eff6ff;font-size:11px;color:#3b82f6;">删除次数</th>`;
     html += `<th style="min-width:52px;background:#eff6ff;font-size:11px;color:#3b82f6;">删除样本</th>`;
   }
@@ -1357,17 +1375,20 @@ function renderTable() {
     }
 
     // 计算每个样本最多有几次结果
-    const sampleRounds = visibleRows.map(ic => {
+    const sampleRounds = visibleRows.map((ic, rowIdx) => {
       if (filterRounds.size > 0) return filterRounds.size;
       let maxRounds = 0;
       visiblePlatInfos.forEach(({ pli, visibleCondIdxs, visibleItemIdxs }) => {
         visibleCondIdxs.forEach(cdi => {
           visibleItemIdxs.forEach(ii => {
-            maxRounds = Math.max(maxRounds, getCell(ci, ic, pli, cdi, ii).length);
+            const len = getCell(ci, ic, pli, cdi, ii).length;
+            maxRounds = Math.max(maxRounds, len);
           });
         });
       });
-      return Math.max(maxRounds, 1);
+      const result = Math.max(maxRounds, 1);
+      if (rowIdx === 0) console.log(`[renderTable] ic=${ic} sampleRounds[${rowIdx}]=${result}`);
+      return result;
     });
 
     const maxCatRounds = showCatPR
@@ -1414,6 +1435,9 @@ function renderTable() {
             // 各项目
             visibleItemIdxs.forEach((ii) => {
               const cell = getCell(ci, ic, pli, cdi, ii);
+              if (rowIdx === 0 && pli === 0 && ii === 0) {
+                console.log(`[renderTable] dataRound=${dataRound} cdi=${cdi} cell[${ci},${ic},${pli},${cdi},${ii}]=`, cell);
+              }
               const r = cell[dataRound];
               if (r && r.result !== null && r.result !== undefined) {
                 const tagClass = r.result === 'pass' ? 'pass' : r.result === 'fail' ? 'fail' : 'empty';
@@ -1482,7 +1506,7 @@ function renderTable() {
           const btnTitle = hasRoundNote ? `点击打开操作菜单\n次备注: ${roundNote}` : '点击打开操作菜单';
 
           html += `<td style="vertical-align:middle;text-align:center;padding:2px 3px;">
-            <span class="add-round-btn" onclick="openAddRoundDropdown(event,${ci},${ic},${dataRound})" title="${escHtml(btnTitle)}">${btnText}</span>
+            <span class="add-round-btn" onclick="openAddRoundDropdown(event,${ci},${ic},${dataRound},${round})" title="${escHtml(btnTitle)}">${btnText}</span>
           </td>`;
           html += `<td style="vertical-align:middle;text-align:center;padding:2px 3px;">
             <span class="del-round-btn" onclick="deleteSampleRound(${ci},${ic},${dataRound})" title="删除第${dataRound+1}次记录">删除</span>
@@ -1843,6 +1867,7 @@ function cdSelect(result) {
   setCell(ci, ic, pli, cdi, ii, arr);
   closeCellDropdown();
   renderTable();
+  _hasUnsavedChanges = true;
 }
 
 function cdDelete() {
@@ -1854,6 +1879,7 @@ function cdDelete() {
   setCell(ci, ic, pli, cdi, ii, arr);
   closeCellDropdown();
   renderTable();
+  _hasUnsavedChanges = true;
 }
 
 function cdNote() {
@@ -1866,9 +1892,9 @@ function cdNote() {
 // ─────────────────────────────────────────────
 //  次操作功能
 // ─────────────────────────────────────────────
-function openAddRoundDropdown(e, ci, ic, dataRound) {
+function openAddRoundDropdown(e, ci, ic, dataRound, displayRound) {
   e.stopPropagation();
-  _addRoundCtx = { ci, ic, dataRound };
+  _addRoundCtx = { ci, ic, dataRound, displayRound };
 
   // 检查该次是否有次备注
   const noteKey = `${ci}_${ic}_round_${dataRound}`;
@@ -1920,57 +1946,117 @@ function addRoundAt(position) {
   });
 
   closeAddRoundDropdown();
-  saveStore();
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
 function moveRound(direction) {
-  if (!_addRoundCtx) return;
-  const { ci, ic, dataRound } = _addRoundCtx;
+  console.log('[moveRound] 被调用，direction=', direction);
+  if (!_addRoundCtx) {
+    console.log('[moveRound] _addRoundCtx 为空，返回');
+    return;
+  }
+  const { ci, ic, dataRound, displayRound } = _addRoundCtx;
+  const filterRounds = msGetSelected('round');
+  console.log('[moveRound] ci=', ci, ', ic=', ic, ', dataRound=', dataRound, ', displayRound=', displayRound, ', filterRounds=', filterRounds);
 
   const platforms = exp.platforms || [{ name: '默认平台', items: exp.items || [], conditions: exp.conditions || [] }];
 
-  // 获取该样本的最大次数
-  let maxRounds = 0;
-  platforms.forEach((_, pli) => {
-    const plItems = platforms[pli].items || [];
-    const plConds = platforms[pli].conditions || exp.conditions || [];
-    plConds.forEach((_, cdi) => {
-      plItems.forEach((_, ii) => {
-        maxRounds = Math.max(maxRounds, getCell(ci, ic, pli, cdi, ii).length);
-      });
-    });
-  });
-
-  // 检查边界条件
-  if (direction === 'up' && dataRound === 0) {
-    alert('已经是第一次了，不能上移！');
+  // 检查边界条件（基于当前单元格的实际长度）
+  const firstCell = getCell(ci, ic, 0, 0, 0);
+  if (!firstCell || firstCell.length === 0) {
+    alert('该样本没有数据！');
     closeAddRoundDropdown();
     return;
   }
-  if (direction === 'down' && dataRound >= maxRounds - 1) {
-    alert('已经是最后一次了，不能下移！');
+  const maxRounds = firstCell.length;
+
+  // 计算显示列数（考虑筛选）
+  const totalDisplayRounds = filterRounds.size > 0 ? filterRounds.size : maxRounds;
+  const sortedRounds = filterRounds.size > 0 ? [...filterRounds].map(Number).sort((a,b)=>a-b) : null;
+
+  // 检查边界条件（基于显示列）
+  if (direction === 'up' && displayRound === 0) {
+    alert('已经是第一列了，不能上移！');
+    closeAddRoundDropdown();
+    return;
+  }
+  if (direction === 'down' && displayRound >= totalDisplayRounds - 1) {
+    alert('已经是最后一列了，不能下移！');
     closeAddRoundDropdown();
     return;
   }
 
-  const targetRound = direction === 'up' ? dataRound - 1 : dataRound + 1;
+  // 计算需要交换的原始索引
+  const targetDisplayRound = direction === 'up' ? displayRound - 1 : displayRound + 1;
+  const sourceDataRound = sortedRounds ? sortedRounds[displayRound] : displayRound;
+  const targetDataRound = sortedRounds ? sortedRounds[targetDisplayRound] : targetDisplayRound;
 
+  console.log('[moveRound] 交换显示列:', displayRound, '→', targetDisplayRound);
+  console.log('[moveRound] 对应原始索引:', sourceDataRound, '→', targetDataRound);
+
+  // 遍历所有平台、条件、项目，交换对应位置的数据
   platforms.forEach((_, pli) => {
     const plItems = platforms[pli].items || [];
     const plConds = platforms[pli].conditions || exp.conditions || [];
     plConds.forEach((_, cdi) => {
       plItems.forEach((_, ii) => {
         const cell = getCell(ci, ic, pli, cdi, ii);
-        // 交换位置
-        [cell[dataRound], cell[targetRound]] = [cell[targetRound], cell[dataRound]];
-        setCell(ci, ic, pli, cdi, ii, cell);
+        if (!cell) return;
+
+        // 计算实际有效数据的长度（过滤掉末尾的 undefined）
+        let validLength = cell.length;
+        for (let i = cell.length - 1; i >= 0; i--) {
+          if (cell[i] === undefined || cell[i] === null) {
+            validLength--;
+          } else {
+            break;
+          }
+        }
+
+        const requiredLength = Math.max(sourceDataRound, targetDataRound) + 1;
+        console.log(`[moveRound] pli=${pli} cdi=${cdi} ii=${ii} cell.length=${cell.length} validLength=${validLength} requiredLength=${requiredLength}`);
+        console.log(`[moveRound] sourceDataRound=${sourceDataRound} targetDataRound=${targetDataRound}`);
+        console.log(`[moveRound] 交换前: [${sourceDataRound}]=`, cell[sourceDataRound], `[${targetDataRound}]=`, cell[targetDataRound]);
+
+        // 只有当该单元格有足够有效数据时才交换
+        if (validLength >= requiredLength) {
+          [cell[sourceDataRound], cell[targetDataRound]] = [cell[targetDataRound], cell[sourceDataRound]];
+          console.log(`[moveRound] 交换后: [${sourceDataRound}]=`, cell[sourceDataRound], `[${targetDataRound}]=`, cell[targetDataRound]);
+          setCell(ci, ic, pli, cdi, ii, cell);
+        }
       });
+
+      // 交换总结备注（conditionNotes）
+      if (exp.conditionNotes) {
+        const sourceKey = `${ci}_${ic}_${pli}_${cdi}_${sourceDataRound}`;
+        const targetKey = `${ci}_${ic}_${pli}_${cdi}_${targetDataRound}`;
+        const sourceNote = exp.conditionNotes[sourceKey] || '';
+        const targetNote = exp.conditionNotes[targetKey] || '';
+        if (sourceNote !== targetNote || (sourceNote || targetNote)) {
+          exp.conditionNotes[sourceKey] = targetNote;
+          exp.conditionNotes[targetKey] = sourceNote;
+          console.log(`[moveRound] 交换总结备注: pli=${pli} cdi=${cdi} [${sourceDataRound}]↔[${targetDataRound}]`);
+        }
+      }
     });
   });
 
+  // 交换次备注（roundNotes）
+  if (exp.roundNotes) {
+    const sourceKey = `${ci}_${ic}_round_${sourceDataRound}`;
+    const targetKey = `${ci}_${ic}_round_${targetDataRound}`;
+    const sourceNote = exp.roundNotes[sourceKey] || '';
+    const targetNote = exp.roundNotes[targetKey] || '';
+    if (sourceNote !== targetNote || (sourceNote || targetNote)) {
+      exp.roundNotes[sourceKey] = targetNote;
+      exp.roundNotes[targetKey] = sourceNote;
+      console.log(`[moveRound] 交换次备注: [${sourceDataRound}]↔[${targetDataRound}]`);
+    }
+  }
+
   closeAddRoundDropdown();
-  saveStore();
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
@@ -2013,7 +2099,7 @@ function saveRoundNote() {
   }
 
   closeModal('roundNoteModal');
-  saveStore();
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
@@ -2769,6 +2855,7 @@ function saveNoteModal() {
     updateNotePreview();
   }
   closeModal('noteModal');
+  _hasUnsavedChanges = true;
 }
 
 // ─────────────────────────────────────────────
@@ -2804,7 +2891,7 @@ function saveSampleNote() {
   }
 
   closeModal('sampleNoteModal');
-  saveStore();
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
@@ -2875,7 +2962,7 @@ function saveRoundNote() {
   }
 
   closeModal('roundNoteModal');
-  saveStore();
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
@@ -2950,7 +3037,7 @@ function saveConditionNote() {
   }
 
   closeModal('conditionNoteModal');
-  saveStore();
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
@@ -4756,6 +4843,7 @@ function addRound(ci) {
       });
     });
   });
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
@@ -4772,6 +4860,7 @@ function addSampleRound(ci, ic) {
       });
     });
   });
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
@@ -4789,6 +4878,7 @@ function deleteSampleRound(ci, ic, round) {
       });
     });
   });
+  _hasUnsavedChanges = true;
   renderTable();
 }
 
@@ -4858,6 +4948,7 @@ function saveRecord() {
   renderTable();
   document.getElementById('recordCount').textContent = state.records.length + ' 条记录';
   showToast('💾 已保存：' + exp.name);
+  _hasUnsavedChanges = false;
 }
 
 function newRecord() {
@@ -4876,9 +4967,13 @@ function newRecord() {
     hiddenItems: [],
     hiddenPlats: [],
     data: {},
+    sampleNotes: {},
+    roundNotes: {},
+    conditionNotes: {},
   };
   state.current = null;
   _currentLab = null;  // 清空实验室跟踪
+  _hasUnsavedChanges = false;  // 清空未保存标志
   renderAll();
   showTab('table');
 }
@@ -4887,14 +4982,13 @@ function loadRecord(id) {
   const rec = state.records.find(r => r.id === id);
   if (!rec) { console.warn('[loadRecord] ❌ 找不到记录 id=', id); return; }
 
-  // 换实验室提示
-  const recLab = rec.name?.split('-')[0]?.trim();
-  if (_currentLab && recLab && recLab !== _currentLab) {
-    if (!confirm(`即将切换实验室：\n从 "${_currentLab}" 切换到 "${recLab}"\n\n确定要切换吗？`)) {
+  // 检查是否有未保存的修改
+  if (_hasUnsavedChanges) {
+    if (!confirm('当前实验有未保存的修改，确定要切换到其他实验吗？\n未保存的内容将会丢失！')) {
       return;
     }
+    _hasUnsavedChanges = false;
   }
-  _currentLab = recLab;
 
   console.log(`[loadRecord] 📂 加载记录 id=${id} name="${rec.name}"`);
   exp = JSON.parse(JSON.stringify(rec));
@@ -4910,18 +5004,10 @@ function loadRecord(id) {
   if (!exp.hiddenConds) exp.hiddenConds = [];
   if (!exp.hiddenItems) exp.hiddenItems = [];
   if (!exp.hiddenPlats) exp.hiddenPlats = [];
-  // 迁移旧 roundNotes（总结备注）到 conditionNotes
-  if (exp.roundNotes && Object.keys(exp.roundNotes).length > 0) {
-    if (!exp.conditionNotes) {
-      exp.conditionNotes = {};
-    }
-    // 旧 roundNotes 的 key 格式：ci_ic_pli_cdi_round（这是总结备注格式）
-    // 直接迁移到 conditionNotes
-    Object.entries(exp.roundNotes).forEach(([key, value]) => {
-      exp.conditionNotes[key] = value;
-    });
-    delete exp.roundNotes;
-  }
+  // 兼容旧数据：补全 roundNotes 和 sampleNotes
+  if (!exp.sampleNotes) exp.sampleNotes = {};
+  if (!exp.roundNotes) exp.roundNotes = {};
+  if (!exp.conditionNotes) exp.conditionNotes = {};
   // 兼容旧数据：若无 platforms，则从旧 items 迁移，将 data key 从 "ci_ic_cdi_ii" 迁移为 "ci_ic_0_cdi_ii"
   if (!exp.platforms || exp.platforms.length === 0) {
     const legacyItems = exp.items || ['项目1'];
@@ -4974,7 +5060,20 @@ function loadRecord(id) {
     }
   }, 100);
 
+  // 恢复侧边栏收起状态
+  const sidebarCollapsed = localStorage.getItem('labrecord_sidebar_collapsed') === 'true';
+  if (sidebarCollapsed) {
+    const sb = document.getElementById('sidebar');
+    const icon = document.getElementById('sidebarToggleIcon');
+    if (sb && icon) {
+      sb.classList.add('collapsed');
+      icon.textContent = '▶';
+    }
+  }
+
   showTab('table');
+
+  _hasUnsavedChanges = false;
 }
 
 function deleteRecord(id) {
@@ -5007,6 +5106,8 @@ function toggleSidebar() {
   const icon = document.getElementById('sidebarToggleIcon');
   const collapsed = sb.classList.toggle('collapsed');
   icon.textContent = collapsed ? '▶' : '◀';
+  // 保存侧边栏收起状态
+  localStorage.setItem('labrecord_sidebar_collapsed', collapsed ? 'true' : 'false');
 }
 
 function renderSidebar() {
@@ -6148,6 +6249,15 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
       }, 250);
     });
   }
+
+  // 刷新前提示保存
+  window.addEventListener('beforeunload', function(e) {
+    if (_hasUnsavedChanges) {
+      e.preventDefault();
+      e.returnValue = ''; // Chrome 需要
+      return ''; // 其他浏览器需要
+    }
+  });
 })();
 </script>
 </body>
