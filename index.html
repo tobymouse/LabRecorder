@@ -4883,10 +4883,7 @@ function deleteSampleRound(ci, ic, round) {
     plConds.forEach((_, cdi) => {
       (pl.items || []).forEach((_, ii) => {
         const arr = getCell(ci, ic, pli, cdi, ii);
-        // 将指定位置设为 null，而不是删除元素，避免后续数据上移
-        if (round < arr.length) {
-          arr[round] = { result: null, note: '' };
-        }
+        arr.splice(round, 1);
         setCell(ci, ic, pli, cdi, ii, arr);
       });
     });
