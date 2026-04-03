@@ -4200,7 +4200,10 @@ function confirmResult() {
 function removeResult(ci, ic, pli, cdi, ii, ri) {
   event.stopPropagation();
   const arr = getCell(ci, ic, pli, cdi, ii);
-  arr.splice(ri, 1);
+  // 将指定位置设为 null，而不是删除元素，避免后续数据上移
+  if (ri < arr.length) {
+    arr[ri] = { result: null, note: '' };
+  }
   setCell(ci, ic, pli, cdi, ii, arr);
   renderTable();
 }
@@ -4880,7 +4883,10 @@ function deleteSampleRound(ci, ic, round) {
     plConds.forEach((_, cdi) => {
       (pl.items || []).forEach((_, ii) => {
         const arr = getCell(ci, ic, pli, cdi, ii);
-        if (round < arr.length) arr.splice(round, 1);
+        // 将指定位置设为 null，而不是删除元素，避免后续数据上移
+        if (round < arr.length) {
+          arr[round] = { result: null, note: '' };
+        }
         setCell(ci, ic, pli, cdi, ii, arr);
       });
     });
